@@ -6,6 +6,7 @@ TagManager:
   tags:
   - ResetZone
   - Ball
+  - Rim
   layers:
   - Default
   - TransparentFX

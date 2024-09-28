@@ -4,24 +4,64 @@ public class ThrowingBall : MonoBehaviour
 {
     private Vector3 initialPosition;    // 공의 초기 위치
     private Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
+    public LineRenderer trajectoryLine; // 궤적을 그릴 LineRenderer 컴포넌트
 
     // 던지기 힘 계수
-    public float baseThrowForce = 10f;     // 기본 힘 크기
-    public float maxThrowForce = 1000f;    // 최대 힘 제한
-    public float forceMultiplier = 10f;   // 드래그 길이에 따른 힘 증가 비율
+    public float baseThrowForce;     // 기본 힘 크기
+    public float maxThrowForce;    // 최대 힘 제한
+    public float forceMultiplier;   // 드래그 길이에 따른 힘 증가 비율
+    public float rotationMultiplier; // 회전력 계수
 
     private bool isDragging = false;    // 드래그 중인지 확인
     private Vector3 startMousePosition; // 드래그 시작 위치
     private Vector3 endMousePosition;   // 드래그 끝 위치
 
-    private Animator animator;
+    public GameObject rim;
+    public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
+    public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
+    public Transform rimTopPoint;        // 림의 상단 지점을 표시하는 Transform
+    public Transform ballBottomPoint;
+    public SpriteRenderer rimSpriteRenderer; // 림의 SpriteRenderer
+    public SpriteRenderer ballSpriteRenderer; // 공의 SpriteRenderer
+
+    public float minScale;        // 공의 최소 크기
+    public float maxScale;          // 공의 최대 크기
+    public float scaleFactor;    // 공의 크기 변화 계수
+    public float scaleDuration; // 공이 점점 작아지는데 걸리는 시간 (초)
+
+    private float ballForce;
+
+    private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
+
+    private bool isScaling = false;     // 공의 크기 변화가 진행 중인지 확인
+    private float currentScaleTime = 0f; // 크기 변화에 사용될 타이머
+
     void Start()
     {
-        animator = GetComponent<Animator>();
+        rim = GameObject.Find("Hoop/Rim");
+        rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
+        rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
+        rimTopPoint = rim.transform.Find("RimTopPoint");
+        ballBottomPoint = transform.Find("BallBottomPoint");
+        rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
+        ballSpriteRenderer = GetComponent<SpriteRenderer>();
         rb = GetComponent<Rigidbody2D>();
         initialPosition = transform.position; // 공의 초기 위치 저장
         rb.gravityScale = 1;            // 중력 활성화
         rb.isKinematic = true;          // 초기에는 공이 움직이지 않도록 설정
+
+        // LineRenderer 설정
+        trajectoryLine = GetComponent<LineRenderer>();
+        trajectoryLine.positionCount = 0; // 궤적 포인트 초기화
+
+        // 시작할 때는 림의 충돌 비활성화
+        rimLeftCollider.enabled = false;
+        rimRightCollider.enabled = false;
+
+        // 초기에는 공이 림보다 위에 그려지도록 설정
+        ballSpriteRenderer.sortingOrder = 2;
+        rimSpriteRenderer.sortingOrder = 1;
+
     }
 
     void Update()
@@ -37,20 +77,13 @@ public class ThrowingBall : MonoBehaviour
                 isDragging = true;
                 startMousePosition = mousePosition;
                 rb.isKinematic = true; // 드래그 중에는 공이 움직이지 않도록 설정
+                hasPassedRim = false; // 공이 림 위로 완전히 지나가지 않았음을 초기화
             }
         }
 
         // 드래그 중일 때
         if (isDragging)
         {
-            // 공이 드래그 동안 움직이지 않도록 고정
-        }
-
-        // 마우스 클릭 종료 시 (왼쪽 버튼 놓기)
-        if (Input.GetMouseButtonUp(0) && isDragging)
-        {
-            isDragging = false;
-            rb.isKinematic = false; // 물리 효과 활성화
             endMousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
             // 드래그한 거리와 방향 계산
@@ -58,16 +91,134 @@ public class ThrowingBall : MonoBehaviour
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
             // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
-            float appliedForce = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
+            ballForce = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
 
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
-            Vector2 force = throwDirection * appliedForce;
+            Vector2 force = throwDirection * ballForce;
+
+            // 유도선 업데이트
+            UpdateTrajectory(force);
+        }
+
+        // 마우스 클릭 종료 시 (왼쪽 버튼 놓기)
+        if (Input.GetMouseButtonUp(0) && isDragging)
+        {
+            isDragging = false;
+            rb.isKinematic = false; // 물리 효과 활성화
+            trajectoryLine.positionCount = 0; // 유도선 초기화
+            endMousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+
+            // 드래그한 거리와 방향 계산
+            Vector3 dragVector = startMousePosition - endMousePosition;
+            float dragDistance = dragVector.magnitude; // 드래그 길이 계산
+
+            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
+            ballForce = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
+
+            // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
+            Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
+            Vector2 force = throwDirection * ballForce;
 
             // 공에 힘을 가하여 던지기
             rb.AddForce(force, ForceMode2D.Impulse);
-            
-            animator.SetBool("IsThrowing", true);
+
+            // 던지는 힘에 비례하여 회전력 추가
+            float torque = ballForce * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
+            rb.AddTorque(torque);
+
+            isScaling = true;
+
+        }
+
+        // 공이 날아가는 동안 크기 변화
+        if (isScaling)
+        {
+            ScaleBallOverTime();
+        }
+
+        // 공이 림을 완전히 넘어가기 전에는 공이 림보다 위에 그려지도록 설정
+        if (!hasPassedRim)
+        {
+            ballSpriteRenderer.sortingOrder = 2;
+            rimSpriteRenderer.sortingOrder = 1;
+        }
+        else
+        {
+            // 공이 림을 넘어간 후에는 림이 공보다 위에 그려지도록 설정
+            ballSpriteRenderer.sortingOrder = 1;
+            rimSpriteRenderer.sortingOrder = 2;
+        }
+
+
+        // 공이 림 위를 완전히 넘어갔는지 확인
+        if (ballBottomPoint.position.y > rimTopPoint.position.y)
+        {
+            hasPassedRim = true; // 림 위를 완전히 넘어감
+        }
+
+        // 공이 림 위를 완전히 넘어간 후 내려올 때만 림의 콜라이더 활성화
+        if (hasPassedRim && rb.velocity.y < 0)
+        {
+            rimLeftCollider.enabled = true;
+            rimRightCollider.enabled = true;
+        }
+        else
+        {
+            rimLeftCollider.enabled = false;
+            rimRightCollider.enabled = false;
+        }
+    }
+
+    void LateUpdate()
+    {
+        Vector3 ballPosition = gameObject.transform.position;
+        // ballBottomPoint가 항상 공의 밑부분에 위치하도록 회전 고정
+        ballBottomPoint.transform.position = new Vector3(ballPosition.x, ballPosition.y - 0.65f, ballPosition.z); // 로컬 좌표에서 아래쪽으로 고정
+        ballBottomPoint.localRotation = Quaternion.identity; // 로컬 회전값 초기화
+    }
+    // 유도선을 업데이트하는 함수
+    private void UpdateTrajectory(Vector2 force)
+    {
+        // 유도선의 포인트 수 설정 (추적할 포인트 수)
+        int pointCount = 30;
+        trajectoryLine.positionCount = pointCount;
+
+        // 현재 공의 위치
+        Vector2 startPosition = transform.position;
+        Vector2 velocity = force / rb.mass; // 초기 속도
+
+        // 중력 설정
+        float gravity = Physics2D.gravity.magnitude;
+
+        for (int i = 0; i < pointCount; i++)
+        {
+            // 시간 간격 설정
+            float t = i * 0.1f; // 시간 간격(예: 0.1초마다)
+
+            // 각 포인트의 위치 계산 (포물선 운동 공식)
+            Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
+            trajectoryLine.SetPosition(i, pointPosition);
+        }
+    }
+
+    // 공이 날아가는 동안 크기를 점차적으로 줄이는 함수
+    private void ScaleBallOverTime()
+    {
+        // 크기 변화 시간 갱신
+        currentScaleTime += Time.deltaTime;
+
+        // 공의 크기 변화 비율 계산
+        float scaleProgress = currentScaleTime / scaleDuration;
+
+        // 공의 크기를 선형적으로 줄이기
+        float newScale = Mathf.Lerp(maxScale, minScale, scaleProgress);
+        transform.localScale = new Vector3(newScale, newScale, newScale);
+
+        // 크기 변화가 완료되었는지 체크
+        if (scaleProgress >= 1f)
+        {
+            isScaling = false; // 크기 변화 중지
         }
     }
 
@@ -81,15 +232,34 @@ public class ThrowingBall : MonoBehaviour
         }
     }
 
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if (collision.gameObject.CompareTag("Rim"))
+        {
+            isScaling = false;
+        }
+    }
+
     // 공 리셋 함수
     private void ResetBall()
     {
-        animator.SetBool("IsThrowing",false);
         // 공의 위치와 상태를 초기화
-        transform.localScale = new Vector2(1,1);
         transform.position = initialPosition; // 초기 위치로 이동
+        transform.rotation = Quaternion.identity;
         rb.velocity = Vector2.zero;           // 속도 초기화
         rb.angularVelocity = 0f;              // 회전 속도 초기화
         rb.isKinematic = true;                // 다시 움직이지 않도록 설정
+
+        // 공의 크기를 초기 크기로 설정
+        transform.localScale = Vector3.one * maxScale;
+
+        // 크기 변화 상태 초기화
+        isScaling = false;
+        currentScaleTime = 0f;
+
+        // 림의 콜라이더 비활성화
+        rimLeftCollider.enabled = false;
+        rimRightCollider.enabled = false;
+        hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
     }
 }
