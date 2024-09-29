@@ -26,10 +26,10 @@ public class ThrowingBall : MonoBehaviour
 
     public float minScale;        // 공의 최소 크기
     public float maxScale;          // 공의 최대 크기
-    public float scaleFactor;    // 공의 크기 변화 계수
-    public float scaleDuration; // 공이 점점 작아지는데 걸리는 시간 (초)
+    public float baseScaleDuration; // 기본 크기 변화 시간 (초)
+    private float scaleDuration;    // 공이 점점 작아지는데 걸리는 시간 (초)
 
-    private float ballForce;
+    public float ballForce;
 
     private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
 
@@ -57,6 +57,10 @@ public class ThrowingBall : MonoBehaviour
         // 시작할 때는 림의 충돌 비활성화
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
+
+        // 유도선의 색상을 설정 (노란색에서 빨간색으로 그라데이션)
+        trajectoryLine.startColor = Color.yellow;
+        trajectoryLine.endColor = Color.red;
 
         // 초기에는 공이 림보다 위에 그려지도록 설정
         ballSpriteRenderer.sortingOrder = 2;
@@ -127,6 +131,9 @@ public class ThrowingBall : MonoBehaviour
             float torque = ballForce * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
             rb.AddTorque(torque);
 
+            // 공의 크기 변화 시간 설정: 던지는 힘에 비례하여 설정
+            scaleDuration = baseScaleDuration / (ballForce / baseThrowForce);
+
             isScaling = true;
 
         }
@@ -150,9 +157,8 @@ public class ThrowingBall : MonoBehaviour
             rimSpriteRenderer.sortingOrder = 2;
         }
 
-
         // 공이 림 위를 완전히 넘어갔는지 확인
-        if (ballBottomPoint.position.y > rimTopPoint.position.y)
+        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce > 10.3f)
         {
             hasPassedRim = true; // 림 위를 완전히 넘어감
         }
@@ -177,6 +183,7 @@ public class ThrowingBall : MonoBehaviour
         ballBottomPoint.transform.position = new Vector3(ballPosition.x, ballPosition.y - 0.65f, ballPosition.z); // 로컬 좌표에서 아래쪽으로 고정
         ballBottomPoint.localRotation = Quaternion.identity; // 로컬 회전값 초기화
     }
+
     // 유도선을 업데이트하는 함수
     private void UpdateTrajectory(Vector2 force)
     {
