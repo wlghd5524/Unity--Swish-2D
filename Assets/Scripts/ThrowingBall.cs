@@ -1,10 +1,11 @@
+using System.Net.Sockets;
 using UnityEngine;
 
 public class ThrowingBall : MonoBehaviour
 {
     private Vector3 initialPosition;    // 공의 초기 위치
     private Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
-    public LineRenderer trajectoryLine; // 궤적을 그릴 LineRenderer 컴포넌트
+    public LineRenderer[] trajectoryLines;  // 공의 궤도 예측선
 
     // 던지기 힘 계수
     public float baseThrowForce;     // 기본 힘 크기
@@ -23,6 +24,7 @@ public class ThrowingBall : MonoBehaviour
     public Transform ballBottomPoint;
     public SpriteRenderer rimSpriteRenderer; // 림의 SpriteRenderer
     public SpriteRenderer ballSpriteRenderer; // 공의 SpriteRenderer
+    public SpriteRenderer netSpriteRenderer; // 그물의 SpriteRenderer
 
     public float minScale;        // 공의 최소 크기
     public float maxScale;          // 공의 최대 크기
@@ -45,27 +47,41 @@ public class ThrowingBall : MonoBehaviour
         ballBottomPoint = transform.Find("BallBottomPoint");
         rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
         ballSpriteRenderer = GetComponent<SpriteRenderer>();
+        netSpriteRenderer = GameObject.Find("Hoop/Net").GetComponent<SpriteRenderer>();
         rb = GetComponent<Rigidbody2D>();
         initialPosition = transform.position; // 공의 초기 위치 저장
         rb.gravityScale = 1;            // 중력 활성화
         rb.isKinematic = true;          // 초기에는 공이 움직이지 않도록 설정
 
         // LineRenderer 설정
-        trajectoryLine = GetComponent<LineRenderer>();
-        trajectoryLine.positionCount = 0; // 궤적 포인트 초기화
+        trajectoryLines = GetComponentsInChildren<LineRenderer>();
+        trajectoryLines[0].positionCount = 0;
+        trajectoryLines[0].startWidth = 0.1f;
+        trajectoryLines[0].endWidth = 0.1f;
+        // 유도선 색상 설정 (첫 번째 궤도선: 노란색에서 주황색)
+        trajectoryLines[0].startColor = Color.yellow;
+        trajectoryLines[0].endColor = new Color(1f, 0.5f, 0f); // 주황색
+
+        trajectoryLines[1].positionCount = 0;
+        trajectoryLines[1].startWidth = 0.1f;
+        trajectoryLines[1].endWidth = 0.1f;
+        // 유도선 색상 설정 (두 번째 궤도선: 주황색에서 빨간색)
+        trajectoryLines[1].startColor = new Color(1f, 0.5f, 0f); // 주황색
+        trajectoryLines[1].endColor = Color.red;
+
 
         // 시작할 때는 림의 충돌 비활성화
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
 
         // 유도선의 색상을 설정 (노란색에서 빨간색으로 그라데이션)
-        trajectoryLine.startColor = Color.yellow;
-        trajectoryLine.endColor = Color.red;
+        //trajectoryLine.startColor = Color.yellow;
+        //trajectoryLine.endColor = Color.red;
 
         // 초기에는 공이 림보다 위에 그려지도록 설정
         ballSpriteRenderer.sortingOrder = 2;
         rimSpriteRenderer.sortingOrder = 1;
-
+        netSpriteRenderer.sortingOrder = 1;
     }
 
     void Update()
@@ -110,7 +126,8 @@ public class ThrowingBall : MonoBehaviour
         {
             isDragging = false;
             rb.isKinematic = false; // 물리 효과 활성화
-            trajectoryLine.positionCount = 0; // 유도선 초기화
+            trajectoryLines[0].positionCount = 0; // 유도선 초기화
+            trajectoryLines[1].positionCount = 0; // 유도선 초기화
             endMousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
 
             // 드래그한 거리와 방향 계산
@@ -149,12 +166,14 @@ public class ThrowingBall : MonoBehaviour
         {
             ballSpriteRenderer.sortingOrder = 2;
             rimSpriteRenderer.sortingOrder = 1;
+            netSpriteRenderer.sortingOrder = 1;
         }
         else
         {
             // 공이 림을 넘어간 후에는 림이 공보다 위에 그려지도록 설정
             ballSpriteRenderer.sortingOrder = 1;
             rimSpriteRenderer.sortingOrder = 2;
+            netSpriteRenderer.sortingOrder = 2;
         }
 
         // 공이 림 위를 완전히 넘어갔는지 확인
@@ -184,30 +203,59 @@ public class ThrowingBall : MonoBehaviour
         ballBottomPoint.localRotation = Quaternion.identity; // 로컬 회전값 초기화
     }
 
-    // 유도선을 업데이트하는 함수
+    //공의 예상 궤적 그리기
     private void UpdateTrajectory(Vector2 force)
     {
-        // 유도선의 포인트 수 설정 (추적할 포인트 수)
         int pointCount = 30;
-        trajectoryLine.positionCount = pointCount;
-
-        // 현재 공의 위치
         Vector2 startPosition = transform.position;
-        Vector2 velocity = force / rb.mass; // 초기 속도
-
-        // 중력 설정
+        Vector2 velocity = force / rb.mass;
         float gravity = Physics2D.gravity.magnitude;
 
+        // 최고점 Y 좌표 찾기
+        float highestY = float.MinValue;
+        int peakIndex = 0;
+
+        // 최고점 찾기
         for (int i = 0; i < pointCount; i++)
         {
-            // 시간 간격 설정
-            float t = i * 0.1f; // 시간 간격(예: 0.1초마다)
-
-            // 각 포인트의 위치 계산 (포물선 운동 공식)
+            float t = i * 0.1f;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
-            trajectoryLine.SetPosition(i, pointPosition);
+
+            if (pointPosition.y > highestY)
+            {
+                highestY = pointPosition.y;
+                peakIndex = i;
+            }
         }
+
+        // 궤도 그리기
+        trajectoryLines[0].positionCount = peakIndex + 1;
+        for (int i = 0; i <= peakIndex; i++)
+        {
+            float t = i * 0.1f;
+            Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
+            trajectoryLines[0].SetPosition(i, pointPosition);
+        }
+
+        // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
+        trajectoryLines[1].positionCount = pointCount - peakIndex;
+        trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
+
+        for (int i = peakIndex + 1; i < pointCount; i++)
+        {
+            float t = i * 0.1f;
+            Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
+            trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
+        }
+
+        // 앞부분 궤도는 림보다 앞에 렌더링
+        trajectoryLines[0].sortingOrder = 2;
+
+        // 뒷부분 궤도는 림보다 뒤에 렌더링
+        trajectoryLines[1].sortingOrder = 1;
     }
+
+
 
     // 공이 날아가는 동안 크기를 점차적으로 줄이는 함수
     private void ScaleBallOverTime()
