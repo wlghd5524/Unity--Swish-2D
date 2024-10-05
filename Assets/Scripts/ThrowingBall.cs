@@ -20,11 +20,14 @@ public class ThrowingBall : MonoBehaviour
     public GameObject rim;
     public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
     public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
+    public EdgeCollider2D netLeftCollider;   //그물의 왼쪽 콜라이더
+    public EdgeCollider2D netRightCollider;  //그물의 오른쪽 콜라이더
     public Transform rimTopPoint;        // 림의 상단 지점을 표시하는 Transform
     public Transform ballBottomPoint;
     public SpriteRenderer rimSpriteRenderer; // 림의 SpriteRenderer
     public SpriteRenderer ballSpriteRenderer; // 공의 SpriteRenderer
     public SpriteRenderer netSpriteRenderer; // 그물의 SpriteRenderer
+
 
     public float minScale;        // 공의 최소 크기
     public float maxScale;          // 공의 최대 크기
@@ -33,6 +36,9 @@ public class ThrowingBall : MonoBehaviour
 
     public float ballForce;
 
+    public float ballMinForceForTrajectoryLine; //앞 림을 넘어가기 위한 최소 힘
+    public float ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
+
     private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
 
     private bool isScaling = false;     // 공의 크기 변화가 진행 중인지 확인
@@ -40,9 +46,12 @@ public class ThrowingBall : MonoBehaviour
 
     void Start()
     {
+        Time.timeScale = 2.0f;
         rim = GameObject.Find("Hoop/Rim");
         rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
         rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
+        netLeftCollider = GameObject.Find("Hoop/Net/NetLeftCollider").GetComponent<EdgeCollider2D>();
+        netRightCollider = GameObject.Find("Hoop/Net/NetRightCollider").GetComponent<EdgeCollider2D>();
         rimTopPoint = rim.transform.Find("RimTopPoint");
         ballBottomPoint = transform.Find("BallBottomPoint");
         rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
@@ -74,14 +83,10 @@ public class ThrowingBall : MonoBehaviour
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
 
-        // 유도선의 색상을 설정 (노란색에서 빨간색으로 그라데이션)
-        //trajectoryLine.startColor = Color.yellow;
-        //trajectoryLine.endColor = Color.red;
-
         // 초기에는 공이 림보다 위에 그려지도록 설정
-        ballSpriteRenderer.sortingOrder = 2;
-        rimSpriteRenderer.sortingOrder = 1;
-        netSpriteRenderer.sortingOrder = 1;
+        ballSpriteRenderer.sortingOrder = 3;
+        rimSpriteRenderer.sortingOrder = 2;
+        netSpriteRenderer.sortingOrder = 2;
     }
 
     void Update()
@@ -164,20 +169,20 @@ public class ThrowingBall : MonoBehaviour
         // 공이 림을 완전히 넘어가기 전에는 공이 림보다 위에 그려지도록 설정
         if (!hasPassedRim)
         {
-            ballSpriteRenderer.sortingOrder = 2;
-            rimSpriteRenderer.sortingOrder = 1;
-            netSpriteRenderer.sortingOrder = 1;
+            ballSpriteRenderer.sortingOrder = 3;
+            rimSpriteRenderer.sortingOrder = 2;
+            netSpriteRenderer.sortingOrder = 2;
         }
         else
         {
             // 공이 림을 넘어간 후에는 림이 공보다 위에 그려지도록 설정
-            ballSpriteRenderer.sortingOrder = 1;
-            rimSpriteRenderer.sortingOrder = 2;
-            netSpriteRenderer.sortingOrder = 2;
+            ballSpriteRenderer.sortingOrder = 2;
+            rimSpriteRenderer.sortingOrder = 3;
+            netSpriteRenderer.sortingOrder = 3;
         }
 
         // 공이 림 위를 완전히 넘어갔는지 확인
-        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce > 10.3f)
+        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce > ballMinForceForTrajectoryLine)
         {
             hasPassedRim = true; // 림 위를 완전히 넘어감
         }
@@ -187,11 +192,15 @@ public class ThrowingBall : MonoBehaviour
         {
             rimLeftCollider.enabled = true;
             rimRightCollider.enabled = true;
+            netLeftCollider.enabled = true;
+            netRightCollider.enabled = true;
         }
         else
         {
             rimLeftCollider.enabled = false;
             rimRightCollider.enabled = false;
+            netLeftCollider.enabled = false;
+            netRightCollider.enabled = false;
         }
     }
 
@@ -206,7 +215,8 @@ public class ThrowingBall : MonoBehaviour
     //공의 예상 궤적 그리기
     private void UpdateTrajectory(Vector2 force)
     {
-        int pointCount = 30;
+        float timeSlot = 0.01f;
+        int pointCount = 300;
         Vector2 startPosition = transform.position;
         Vector2 velocity = force / rb.mass;
         float gravity = Physics2D.gravity.magnitude;
@@ -218,7 +228,7 @@ public class ThrowingBall : MonoBehaviour
         // 최고점 찾기
         for (int i = 0; i < pointCount; i++)
         {
-            float t = i * 0.1f;
+            float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
 
             if (pointPosition.y > highestY)
@@ -232,7 +242,7 @@ public class ThrowingBall : MonoBehaviour
         trajectoryLines[0].positionCount = peakIndex + 1;
         for (int i = 0; i <= peakIndex; i++)
         {
-            float t = i * 0.1f;
+            float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
             trajectoryLines[0].SetPosition(i, pointPosition);
         }
@@ -243,16 +253,32 @@ public class ThrowingBall : MonoBehaviour
 
         for (int i = peakIndex + 1; i < pointCount; i++)
         {
-            float t = i * 0.1f;
+            float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
             trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
         }
 
         // 앞부분 궤도는 림보다 앞에 렌더링
-        trajectoryLines[0].sortingOrder = 2;
+        trajectoryLines[0].sortingOrder = 3;
 
-        // 뒷부분 궤도는 림보다 뒤에 렌더링
-        trajectoryLines[1].sortingOrder = 1;
+        if (ballForce > ballMinForceForTrajectoryLine)
+        {
+            if(ballForce > ballMaxForceForTrajectoryLine)
+            {
+                // 뒷부분 궤도는 일정 힘 이상일 때 백보드보다 뒤에 렌더링
+                trajectoryLines[1].sortingOrder = 0;
+            }
+            else
+            {
+                // 뒷부분 궤도는 일정 힘 이상일 때 림보다 앞에 렌더링
+                trajectoryLines[1].sortingOrder = 2;
+            }
+            
+        }
+        else
+        {
+            trajectoryLines[1].sortingOrder = 3;
+        }
     }
 
 
@@ -277,6 +303,14 @@ public class ThrowingBall : MonoBehaviour
         }
     }
 
+    private void OnCollisionEnter2D(Collision2D collision)
+    {
+        if(collision.gameObject.CompareTag("Net"))
+        {
+            rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
+        }
+    }
+
     // 충돌 감지 함수
     private void OnTriggerEnter2D(Collider2D collision)
     {
@@ -284,14 +318,6 @@ public class ThrowingBall : MonoBehaviour
         if (collision.CompareTag("ResetZone"))
         {
             ResetBall(); // 공 리셋 함수 호출
-        }
-    }
-
-    private void OnCollisionEnter2D(Collision2D collision)
-    {
-        if (collision.gameObject.CompareTag("Rim"))
-        {
-            isScaling = false;
         }
     }
 
