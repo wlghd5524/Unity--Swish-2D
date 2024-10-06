@@ -17,6 +17,7 @@ public class ThrowingBall : MonoBehaviour
     private Vector3 startMousePosition; // 드래그 시작 위치
     private Vector3 endMousePosition;   // 드래그 끝 위치
 
+    public GameObject hoop;
     public GameObject rim;
     public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
     public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
@@ -47,6 +48,7 @@ public class ThrowingBall : MonoBehaviour
     void Start()
     {
         Time.timeScale = 2.0f;
+        hoop = GameObject.Find("Hoop");
         rim = GameObject.Find("Hoop/Rim");
         rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
         rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
@@ -179,6 +181,7 @@ public class ThrowingBall : MonoBehaviour
             ballSpriteRenderer.sortingOrder = 2;
             rimSpriteRenderer.sortingOrder = 3;
             netSpriteRenderer.sortingOrder = 3;
+            
         }
 
         // 공이 림 위를 완전히 넘어갔는지 확인
@@ -190,10 +193,19 @@ public class ThrowingBall : MonoBehaviour
         // 공이 림 위를 완전히 넘어간 후 내려올 때만 림의 콜라이더 활성화
         if (hasPassedRim && rb.velocity.y < 0)
         {
-            rimLeftCollider.enabled = true;
-            rimRightCollider.enabled = true;
-            netLeftCollider.enabled = true;
-            netRightCollider.enabled = true;
+            //공이 너무 세면 백보드를 넘어가 공이 백보드 뒤에 그려지도록 설정
+            if (ballForce > ballMaxForceForTrajectoryLine)
+            {
+                ballSpriteRenderer.sortingOrder = 0;
+            }
+            else
+            {
+                rimLeftCollider.enabled = true;
+                rimRightCollider.enabled = true;
+                netLeftCollider.enabled = true;
+                netRightCollider.enabled = true;
+            }
+            
         }
         else
         {
@@ -342,5 +354,20 @@ public class ThrowingBall : MonoBehaviour
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
+
+        //hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
+
+
+        // 기준이 되는 높이와 그에 따른 힘
+        float referenceHeight = 2.0f;  // hoop.transform.position.y가 2.0f일 때 기준
+        float referenceMinForce = 10.3f;  // 2.0 높이일 때 최소 힘
+        float referenceMaxForce = 12.5f;  // 2.0 높이일 때 최대 힘
+
+        // 현재 림의 높이 가져오기
+        float currentRimHeight = hoop.transform.position.y;
+
+        // 림의 높이에 따라 최소 및 최대 힘을 선형적으로 조정
+        ballMinForceForTrajectoryLine = referenceMinForce * (currentRimHeight / referenceHeight);
+        ballMaxForceForTrajectoryLine = referenceMaxForce * (currentRimHeight / referenceHeight);
     }
 }
