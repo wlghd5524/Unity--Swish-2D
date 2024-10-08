@@ -35,10 +35,10 @@ public class ThrowingBall : MonoBehaviour
     public float baseScaleDuration; // 기본 크기 변화 시간 (초)
     private float scaleDuration;    // 공이 점점 작아지는데 걸리는 시간 (초)
 
-    public float ballForce;
+    public Vector2 ballForce;
 
-    public float ballMinForceForTrajectoryLine; //앞 림을 넘어가기 위한 최소 힘
-    public float ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
+    public Vector2 ballMinForceForTrajectoryLine; //앞 림을 넘어가기 위한 최소 힘
+    public Vector2 ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
 
     private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
 
@@ -117,15 +117,15 @@ public class ThrowingBall : MonoBehaviour
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
-            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
-            ballForce = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
+            
 
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
-            Vector2 force = throwDirection * ballForce;
+            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
+            ballForce = throwDirection * Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
 
             // 유도선 업데이트
-            UpdateTrajectory(force);
+            UpdateTrajectory(ballForce);
         }
 
         // 마우스 클릭 종료 시 (왼쪽 버튼 놓기)
@@ -141,22 +141,22 @@ public class ThrowingBall : MonoBehaviour
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
-            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
-            ballForce = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
-
+            
+            float forceMaginitude = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
-            Vector2 force = throwDirection * ballForce;
+            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
+            ballForce = throwDirection * forceMaginitude;
 
             // 공에 힘을 가하여 던지기
-            rb.AddForce(force, ForceMode2D.Impulse);
-
+            rb.AddForce(ballForce, ForceMode2D.Impulse);
+            
             // 던지는 힘에 비례하여 회전력 추가
-            float torque = ballForce * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
+            float torque = forceMaginitude * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
             rb.AddTorque(torque);
 
             // 공의 크기 변화 시간 설정: 던지는 힘에 비례하여 설정
-            scaleDuration = baseScaleDuration / (ballForce / baseThrowForce);
+            scaleDuration = baseScaleDuration / (forceMaginitude / baseThrowForce);
 
             isScaling = true;
 
@@ -181,11 +181,11 @@ public class ThrowingBall : MonoBehaviour
             ballSpriteRenderer.sortingOrder = 2;
             rimSpriteRenderer.sortingOrder = 3;
             netSpriteRenderer.sortingOrder = 3;
-            
+
         }
 
         // 공이 림 위를 완전히 넘어갔는지 확인
-        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce > ballMinForceForTrajectoryLine)
+        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce.magnitude > ballMinForceForTrajectoryLine.magnitude)
         {
             hasPassedRim = true; // 림 위를 완전히 넘어감
         }
@@ -194,7 +194,7 @@ public class ThrowingBall : MonoBehaviour
         if (hasPassedRim && rb.velocity.y < 0)
         {
             //공이 너무 세면 백보드를 넘어가 공이 백보드 뒤에 그려지도록 설정
-            if (ballForce > ballMaxForceForTrajectoryLine)
+            if (ballForce.magnitude > ballMaxForceForTrajectoryLine.magnitude)
             {
                 ballSpriteRenderer.sortingOrder = 0;
             }
@@ -205,7 +205,7 @@ public class ThrowingBall : MonoBehaviour
                 netLeftCollider.enabled = true;
                 netRightCollider.enabled = true;
             }
-            
+
         }
         else
         {
@@ -273,9 +273,9 @@ public class ThrowingBall : MonoBehaviour
         // 앞부분 궤도는 림보다 앞에 렌더링
         trajectoryLines[0].sortingOrder = 3;
 
-        if (ballForce > ballMinForceForTrajectoryLine)
+        if (ballForce.magnitude > ballMinForceForTrajectoryLine.magnitude)
         {
-            if(ballForce > ballMaxForceForTrajectoryLine)
+            if (ballForce.magnitude > ballMaxForceForTrajectoryLine.magnitude)
             {
                 // 뒷부분 궤도는 일정 힘 이상일 때 백보드보다 뒤에 렌더링
                 trajectoryLines[1].sortingOrder = 0;
@@ -285,7 +285,7 @@ public class ThrowingBall : MonoBehaviour
                 // 뒷부분 궤도는 일정 힘 이상일 때 림보다 앞에 렌더링
                 trajectoryLines[1].sortingOrder = 2;
             }
-            
+
         }
         else
         {
@@ -317,7 +317,7 @@ public class ThrowingBall : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if(collision.gameObject.CompareTag("Net"))
+        if (collision.gameObject.CompareTag("Net"))
         {
             rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
         }
@@ -355,19 +355,23 @@ public class ThrowingBall : MonoBehaviour
         rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
 
-        //hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
+        hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
 
 
-        // 기준이 되는 높이와 그에 따른 힘
-        float referenceHeight = 2.0f;  // hoop.transform.position.y가 2.0f일 때 기준
-        float referenceMinForce = 10.3f;  // 2.0 높이일 때 최소 힘
-        float referenceMaxForce = 12.5f;  // 2.0 높이일 때 최대 힘
+        // 기준이 되는 림의 위치와 그에 따른 힘 (림의 초기 위치와 힘)
+        Vector2 referenceRimPosition = new Vector2(0f, 2.0f);  // 림의 초기 X, Y 위치
+        Vector2 referenceMinForce = new Vector2(0f, 10.3f);    // 기준 림 위치에서 필요한 최소 힘
+        Vector2 referenceMaxForce = new Vector2(0f, 12.5f);    // 기준 림 위치에서 넘지 않도록 할 최대 힘
 
-        // 현재 림의 높이 가져오기
-        float currentRimHeight = hoop.transform.position.y;
+        // 현재 림의 위치 가져오기
+        Vector2 currentRimPosition = hoop.transform.position;
 
-        // 림의 높이에 따라 최소 및 최대 힘을 선형적으로 조정
-        ballMinForceForTrajectoryLine = referenceMinForce * (currentRimHeight / referenceHeight);
-        ballMaxForceForTrajectoryLine = referenceMaxForce * (currentRimHeight / referenceHeight);
+        // 림의 위치 차이 벡터 계산
+        Vector2 rimPositionDifference = currentRimPosition - referenceRimPosition;
+
+        // 림 위치에 따라 최소 및 최대 힘을 조정 (거리 비율을 적용)
+        ballMinForceForTrajectoryLine = referenceMinForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
+        ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
+
     }
 }
