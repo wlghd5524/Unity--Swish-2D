@@ -1,4 +1,5 @@
-using System.Net.Sockets;
+using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 
 public class ThrowingBall : MonoBehaviour
@@ -19,6 +20,7 @@ public class ThrowingBall : MonoBehaviour
 
     public GameObject hoop;
     public GameObject rim;
+    public GameObject net;
     public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
     public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
     public EdgeCollider2D netLeftCollider;   //그물의 왼쪽 콜라이더
@@ -40,16 +42,34 @@ public class ThrowingBall : MonoBehaviour
     public Vector2 ballMinForceForTrajectoryLine; //앞 림을 넘어가기 위한 최소 힘
     public Vector2 ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
 
+    public GameObject windArrow;
+    public TextMeshProUGUI windVelocityText;
+    public bool windOn;
+    public float windForce;
+    public Vector2 windDirection;
+
     private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
+    private bool hasScored = false;
+    private bool hitRim = false;
 
     private bool isScaling = false;     // 공의 크기 변화가 진행 중인지 확인
     private float currentScaleTime = 0f; // 크기 변화에 사용될 타이머
+
+    public List<AudioClip> netSounds;
+    public List<AudioClip> rimSounds;
+    public List<AudioClip> resetSounds;
+    public List<AudioClip> catchingSounds;
+    public AudioClip whistleSound;
+    public AudioSource ballAudio;
+    public AudioSource rimAudio;
+    public AudioSource netAudio;
 
     void Start()
     {
         Time.timeScale = 2.0f;
         hoop = GameObject.Find("Hoop");
         rim = GameObject.Find("Hoop/Rim");
+        net = GameObject.Find("Hoop/Net");
         rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
         rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
         netLeftCollider = GameObject.Find("Hoop/Net/NetLeftCollider").GetComponent<EdgeCollider2D>();
@@ -58,7 +78,7 @@ public class ThrowingBall : MonoBehaviour
         ballBottomPoint = transform.Find("BallBottomPoint");
         rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
         ballSpriteRenderer = GetComponent<SpriteRenderer>();
-        netSpriteRenderer = GameObject.Find("Hoop/Net").GetComponent<SpriteRenderer>();
+        netSpriteRenderer = net.GetComponent<SpriteRenderer>();
         rb = GetComponent<Rigidbody2D>();
         initialPosition = transform.position; // 공의 초기 위치 저장
         rb.gravityScale = 1;            // 중력 활성화
@@ -89,6 +109,14 @@ public class ThrowingBall : MonoBehaviour
         ballSpriteRenderer.sortingOrder = 3;
         rimSpriteRenderer.sortingOrder = 2;
         netSpriteRenderer.sortingOrder = 2;
+
+        windArrow = GameObject.Find("Canvas/Wind/WindArrow");
+        windVelocityText = GameObject.Find("Canvas/Wind/WindVelocity").GetComponent<TextMeshProUGUI>();
+        windOn = false;
+
+        rimAudio = rim.GetComponent<AudioSource>();
+        ballAudio = GetComponent<AudioSource>();
+        netAudio = net.GetComponent<AudioSource>();
     }
 
     void Update()
@@ -117,7 +145,7 @@ public class ThrowingBall : MonoBehaviour
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
-            
+
 
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
@@ -141,7 +169,7 @@ public class ThrowingBall : MonoBehaviour
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
-            
+
             float forceMaginitude = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
@@ -150,7 +178,7 @@ public class ThrowingBall : MonoBehaviour
 
             // 공에 힘을 가하여 던지기
             rb.AddForce(ballForce, ForceMode2D.Impulse);
-            
+
             // 던지는 힘에 비례하여 회전력 추가
             float torque = forceMaginitude * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
             rb.AddTorque(torque);
@@ -214,6 +242,16 @@ public class ThrowingBall : MonoBehaviour
             netLeftCollider.enabled = false;
             netRightCollider.enabled = false;
         }
+        if (windOn)
+        {
+            windArrow.transform.parent.gameObject.SetActive(true);
+
+            ApplyWindEffect();
+        }
+        else
+        {
+            windArrow.transform.parent.gameObject.SetActive(false);
+        }
     }
 
     void LateUpdate()
@@ -222,6 +260,14 @@ public class ThrowingBall : MonoBehaviour
         // ballBottomPoint가 항상 공의 밑부분에 위치하도록 회전 고정
         ballBottomPoint.transform.position = new Vector3(ballPosition.x, ballPosition.y - 0.65f, ballPosition.z); // 로컬 좌표에서 아래쪽으로 고정
         ballBottomPoint.localRotation = Quaternion.identity; // 로컬 회전값 초기화
+    }
+
+    // 바람의 영향을 적용하는 함수
+    void ApplyWindEffect()
+    {
+        // 바람의 세기에 따라 X축으로 힘을 가함
+        Vector2 windEffect = windDirection * windForce * Time.deltaTime;
+        rb.AddForce(windEffect, ForceMode2D.Force);
     }
 
     //공의 예상 궤적 그리기
@@ -317,18 +363,48 @@ public class ThrowingBall : MonoBehaviour
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.CompareTag("Net"))
+        //골이 들어갔을 때
+        if (collision.gameObject.CompareTag("Net") && !hasScored)
         {
             rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
+            netAudio.clip = netSounds[Random.Range(0, netSounds.Count)];
+            netAudio.Play();
+            // 림에 맞았으면 20점, 안 맞았으면 30점
+            if (hitRim)
+            {
+                ScoreManager.Instance.AddScore(20);
+            }
+            else
+            {
+                ScoreManager.Instance.AddScore(30);
+            }
+            hasScored = true;
+            hitRim = false;
+        }
+        if (collision.gameObject.CompareTag("Rim"))
+        {
+            rimAudio.clip = rimSounds[Random.Range(0, rimSounds.Count)];
+            rimAudio.Play();
+            hitRim = true;
         }
     }
-
+        
     // 충돌 감지 함수
     private void OnTriggerEnter2D(Collider2D collision)
     {
         // 충돌한 오브젝트의 태그가 "resetZone"일 경우
         if (collision.CompareTag("ResetZone"))
         {
+            if (collision.gameObject.name == "ResetBottomZone")
+            {
+                ballAudio.clip = resetSounds[Random.Range(0, resetSounds.Count)];
+                ballAudio.Play();
+            }
+            else
+            {
+                ballAudio.clip = whistleSound;
+                ballAudio.Play();
+            }
             ResetBall(); // 공 리셋 함수 호출
         }
     }
@@ -354,6 +430,7 @@ public class ThrowingBall : MonoBehaviour
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
+        hasScored = false;
 
         hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
 
@@ -373,5 +450,24 @@ public class ThrowingBall : MonoBehaviour
         ballMinForceForTrajectoryLine = referenceMinForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
         ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
 
+        if (ScoreManager.Instance.currentScore >= 100)
+        {
+            windOn = true;
+        }
+        windForce = Random.Range(1, 6) * 10; // 10 ~ 100 사이의 랜덤 값으로 바람의 세기를 설정
+        windVelocityText.text = ((int)(windForce / 10)).ToString();
+        // 50% 확률로 왼쪽 또는 오른쪽 방향 설정
+        if (Random.Range(0, 2) == 0) // 0 또는 1이 랜덤으로 선택됨
+        {
+            windDirection = Vector2.left; // 왼쪽 방향
+            windArrow.transform.eulerAngles = new Vector3(0, 0, 90);
+        }
+        else
+        {
+            windDirection = Vector2.right; // 오른쪽 방향
+            windArrow.transform.eulerAngles = new Vector3(0, 0, -90);
+        }
+        //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
+        //ballAudio.Play();
     }
 }
