@@ -4,8 +4,9 @@ using UnityEngine;
 
 public class ThrowingBall : MonoBehaviour
 {
+    public static ThrowingBall Instance { get; private set; }
     private Vector3 initialPosition;    // 공의 초기 위치
-    private Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
+    public Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
     public LineRenderer[] trajectoryLines;  // 공의 궤도 예측선
 
     // 던지기 힘 계수
@@ -50,6 +51,7 @@ public class ThrowingBall : MonoBehaviour
 
     private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
     private bool hasScored = false;
+    private int consecutiveGoals = 0;
     private bool hitRim = false;
 
     private bool isScaling = false;     // 공의 크기 변화가 진행 중인지 확인
@@ -64,9 +66,13 @@ public class ThrowingBall : MonoBehaviour
     public AudioSource rimAudio;
     public AudioSource netAudio;
 
+    private void Awake()
+    {
+        Instance = this;
+    }
+
     void Start()
     {
-        Time.timeScale = 2.0f;
         hoop = GameObject.Find("Hoop");
         rim = GameObject.Find("Hoop/Rim");
         net = GameObject.Find("Hoop/Net");
@@ -187,7 +193,7 @@ public class ThrowingBall : MonoBehaviour
             scaleDuration = baseScaleDuration / (forceMaginitude / baseThrowForce);
 
             isScaling = true;
-
+            TimeManager.Instance.timeOn = true;
         }
 
         // 공이 날아가는 동안 크기 변화
@@ -378,6 +384,11 @@ public class ThrowingBall : MonoBehaviour
             {
                 ScoreManager.Instance.AddScore(30);
             }
+            consecutiveGoals++;
+            if (consecutiveGoals >= 2)
+            {
+                ScoreManager.Instance.AddScore(consecutiveGoals * 10);
+            }
             hasScored = true;
             hitRim = false;
         }
@@ -388,7 +399,7 @@ public class ThrowingBall : MonoBehaviour
             hitRim = true;
         }
     }
-        
+
     // 충돌 감지 함수
     private void OnTriggerEnter2D(Collider2D collision)
     {
@@ -430,6 +441,10 @@ public class ThrowingBall : MonoBehaviour
         rimLeftCollider.enabled = false;
         rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
+        if (!hasScored)
+        {
+            consecutiveGoals = 0;
+        }
         hasScored = false;
 
         hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));

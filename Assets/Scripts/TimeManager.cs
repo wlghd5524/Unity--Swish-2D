@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -5,12 +6,12 @@ using UnityEngine.UI;
 
 public class TimeManager : MonoBehaviour
 {
-    public static TimeManager Instance {  get; private set; }
+    public static TimeManager Instance { get; private set; }
+    public bool timeOn = false;
     public Image timerDial; // 다이얼 UI 이미지
     public Text timerText;
     public float totalTime = 120f; // 총 타이머 시간 (2분)
     public AudioClip endBuzzerSound;
-    public bool isTimeOver = false;
     private AudioSource audioSource;
     private float timeRemaining;
     private bool hasPlayedEndSound = false; // 게임 종료
@@ -30,6 +31,8 @@ public class TimeManager : MonoBehaviour
     }
     void Start()
     {
+        Time.timeScale = 2.0f;
+        timeOn = false;
         timeRemaining = totalTime; // 초기 시간 설정
         audioSource = GetComponent<AudioSource>();
         UpdateTimerUI();
@@ -37,23 +40,24 @@ public class TimeManager : MonoBehaviour
 
     void Update()
     {
-        
-        if (timeRemaining > 0)
+        if (timeOn)
         {
-            timeRemaining -= Time.deltaTime / Time.timeScale; // 남은 시간 갱신
-            UpdateTimerText();
-            UpdateTimerUI();
-        }
-        else
-        {
-            if (!hasPlayedEndSound)
+            if (timeRemaining > 0)
             {
-                audioSource.clip = endBuzzerSound;
-                audioSource.Play();
-                hasPlayedEndSound = true;
-                isTimeOver = true;
+                timeRemaining -= Time.deltaTime / Time.timeScale; // 남은 시간 갱신
+                UpdateTimerText();
+                UpdateTimerUI();
             }
-
+            else
+            {
+                if (ThrowingBall.Instance.rb.velocity.sqrMagnitude == 0 && !hasPlayedEndSound)
+                {
+                    audioSource.clip = endBuzzerSound;
+                    audioSource.Play();
+                    hasPlayedEndSound = true;
+                    ScoreManager.Instance.GameOver();
+                }
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -11,6 +12,10 @@ public class GameManager : MonoBehaviour
     public Button howToPlayButton;
     public Button rankingButton;
     public Button quitButton;
+    public Button signInButton;
+
+    public GameObject loginPanel;
+
     void Awake()
     {
         // 싱글톤 패턴 구현
@@ -28,13 +33,20 @@ public class GameManager : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
-        startButton.onClick.AddListener(GoToGameScene);
+        startButton.onClick.AddListener(OpenLoginPopup);
         howToPlayButton.onClick.AddListener(OpenHowToPlay);
         rankingButton.onClick.AddListener(OpenRanking);
         quitButton.onClick.AddListener(QuitGame);
+        signInButton.onClick.AddListener(LoginManager.Instance.ValidateSignIn);
     }
 
-    void GoToGameScene()
+    void OpenLoginPopup()
+    {
+        loginPanel.SetActive(true);
+        LoginManager.Instance.UpdateInputFieldForRememberedUser();
+    }
+
+    public void GoToGameScene()
     {
         SceneManager.LoadScene("GameScene");
     }
@@ -52,4 +64,6 @@ public class GameManager : MonoBehaviour
     {
 
     }
+
+
 }
