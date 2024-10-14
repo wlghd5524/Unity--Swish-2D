@@ -28,30 +28,23 @@ public class WebConnector : MonoBehaviour
     private string apiUrl = "https://localhost:7052/api/User"; // 새로운 API 엔드포인트
 
     // 서버에서 유저 정보를 가져옴
-    public bool Login(string userNumber, string name)
+    public IEnumerator Login(string userNumber, string name)
     {
-        StartCoroutine(GetUser(userNumber, name));
-        if (LoginManager.Instance.currentUser == null)
+        yield return StartCoroutine(GetUser(userNumber, name));
+        if (LoginManager.Instance.currentUser != null && LoginManager.Instance.currentUser.playCount < 3)
         {
-            return false;
+            LoginManager.Instance.loginSuccess = true;
         }
-        if (LoginManager.Instance.currentUser.PlayCount > 3)
+        else
         {
-            return false;
+            LoginManager.Instance.loginSuccess = false;
         }
-        return true;
     }
 
-    // 유저 정보를 서버로 보냄
-    public void Register(User user)
+    public IEnumerator UpdateUsers()
     {
-        StartCoroutine(SendUserDataToServer(user));
-    }
-
-    public void UpdateUsers()
-    {
-        StartCoroutine(GetAllUsers());
-        User.users.Sort((x, y) => x.Score.CompareTo(y.Score)); // 점수를 기준으로 오름차순 정렬
+        yield return StartCoroutine(GetAllUsers());
+        User.users.Sort((x, y) => y.score.CompareTo(x.score)); // 점수를 기준으로 내림차순 정렬
     }
 
 
@@ -86,7 +79,7 @@ public class WebConnector : MonoBehaviour
                 User existingUser = JsonUtility.FromJson<User>(result);
 
                 // 유저 정보를 이용해 필요한 작업을 수행
-                Debug.Log($"User found: {existingUser.Name}, PlayCount: {existingUser.PlayCount}");
+                Debug.Log($"User found: {existingUser.name}, PlayCount: {existingUser.playCount}");
                 LoginManager.Instance.currentUser = existingUser;
             }
         }
@@ -107,18 +100,36 @@ public class WebConnector : MonoBehaviour
         else
         {
             string result = www.downloadHandler.text;
+            ResponseMessage responseMessage = JsonUtility.FromJson<ResponseMessage>(result);
+            // 메시지에 따라 처리
+            if (responseMessage.message == "User not found")
+            {
+                Debug.Log("No users found.");
+                yield break;
+            }
 
-            // 반환된 JSON 데이터를 User 객체로 변환
-            List<User> allUsers = JsonHelper.FromJsonList<User>(result);
-            User.users = allUsers;
+            // 유저 배열이 null이 아닌 경우 리스트로 변환
+            if (responseMessage.users != null)
+            {
+                User.users = new List<User>(responseMessage.users);
+                Debug.Log("Users loaded successfully.");
+            }
         }
     }
-    IEnumerator SendUserDataToServer(User user)
+    public IEnumerator SendUserDataToServer(User user)
     {
         // UserData 객체를 JSON 문자열로 변환
         string jsonData = JsonUtility.ToJson(user);
-        // POST 요청 준비
-        UnityWebRequest www = new UnityWebRequest(apiUrl + "/register", "POST");
+        UnityWebRequest www;
+        if (user.playCount == 1)
+        {
+            // POST 요청 준비
+            www = new UnityWebRequest(apiUrl + "/register", "POST");
+        }
+        else
+        {
+            www = new UnityWebRequest(apiUrl + $"/update/{user.userNumber}","PUT");
+        }
         byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonData);
         www.uploadHandler = new UploadHandlerRaw(bodyRaw);
         www.downloadHandler = new DownloadHandlerBuffer();
@@ -130,13 +141,17 @@ public class WebConnector : MonoBehaviour
         // 응답 처리
         if (www.result != UnityWebRequest.Result.Success)
         {
-            Debug.LogError($"Error: {www.error}");
+            Debug.LogError($"Error: {www.error}, Status Code: {www.responseCode}");
         }
         else
         {
             Debug.Log("User data sent successfully!");
             Debug.Log($"Response: {www.downloadHandler.text}");
         }
+
+        // 업로드 핸들러 및 다운로드 핸들러 해제
+        www.uploadHandler.Dispose();
+        www.downloadHandler.Dispose();
     }
 }
 
@@ -144,24 +159,11 @@ public class WebConnector : MonoBehaviour
 public class ResponseMessage
 {
     public string message;
+    public User[] users;
 }
 
-public static class JsonHelper
+[System.Serializable]
+public class UserArrayWrapper
 {
-    public static List<T> FromJsonList<T>(string json)
-    {
-        string newJson = "{\"Items\":" + json + "}";
-        Wrapper<T> wrapper = JsonUtility.FromJson<Wrapper<T>>(newJson);
-        if(wrapper.Items == null)
-        {
-            return new List<T>();
-        }
-        return new List<T>(wrapper.Items);
-    }
-
-    [System.Serializable]
-    private class Wrapper<T>
-    {
-        public T[] Items;
-    }
+    public User[] users;
 }

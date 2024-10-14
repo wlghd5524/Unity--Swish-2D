@@ -15,21 +15,20 @@ public class TimeManager : MonoBehaviour
     private AudioSource audioSource;
     private float timeRemaining;
     private bool hasPlayedEndSound = false; // 게임 종료
-
+    public bool hasCalledGameOver = false;
     void Awake()
     {
         // 싱글톤 패턴 구현
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
         }
         else
         {
             Destroy(gameObject);
         }
     }
-    void Start()
+    void OnEnable()
     {
         Time.timeScale = 2.0f;
         timeOn = false;
@@ -50,12 +49,16 @@ public class TimeManager : MonoBehaviour
             }
             else
             {
-                if (ThrowingBall.Instance.rb.velocity.sqrMagnitude == 0 && !hasPlayedEndSound)
+                if(!hasPlayedEndSound)
                 {
                     audioSource.clip = endBuzzerSound;
                     audioSource.Play();
                     hasPlayedEndSound = true;
-                    ScoreManager.Instance.GameOver();
+                }
+                if (ThrowingBall.Instance.rb.velocity.sqrMagnitude == 0 && !hasCalledGameOver)
+                {
+                    GameManager.Instance.GameOver();
+                    hasCalledGameOver = true;
                 }
             }
         }

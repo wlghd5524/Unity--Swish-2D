@@ -14,7 +14,7 @@ public class LoginManager : MonoBehaviour
     public TextMeshProUGUI loginMessageText;
     public User currentUser;
     public Toggle rememberToggle;
-
+    public bool loginSuccess = false;
     private void Awake()
     {
         Instance = this;
@@ -33,8 +33,8 @@ public class LoginManager : MonoBehaviour
     {
         if (rememberToggle.isOn && currentUser != null)
         {
-            userNumberInputField.text = currentUser.UserNumber;
-            nameInputField.text = currentUser.Name;
+            userNumberInputField.text = currentUser.userNumber;
+            nameInputField.text = currentUser.name;
         }
         else
         {
@@ -43,7 +43,7 @@ public class LoginManager : MonoBehaviour
         }
     }
     // 학생 번호 유효성 검사
-    public void ValidateSignIn()
+    public IEnumerator ValidateSignIn()
     {
         string studentNumber = userNumberInputField.text; // 입력된 학생 번호 가져오기
         string name = nameInputField.text;
@@ -56,11 +56,15 @@ public class LoginManager : MonoBehaviour
             }
             else
             {
+
+                loginMessageText.color = Color.yellow;
+                loginMessageText.text = "Loading..";
                 Debug.Log("학생 번호가 유효합니다.");
-                if (WebConnector.Instance.Login(studentNumber, name))
+                yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.Login(studentNumber, name));
+                if (loginSuccess)
                 {
                     //로그인 성공
-                    currentUser.PlayCount++;
+                    currentUser.playCount++;
                     StartCoroutine(ShowSignInSuccessMessage());
                 }
                 else

@@ -71,7 +71,7 @@ public class ThrowingBall : MonoBehaviour
         Instance = this;
     }
 
-    void Start()
+    void OnEnable()
     {
         hoop = GameObject.Find("Hoop");
         rim = GameObject.Find("Hoop/Rim");
@@ -127,6 +127,10 @@ public class ThrowingBall : MonoBehaviour
 
     void Update()
     {
+        if(TimeManager.Instance.hasCalledGameOver)
+        {
+            return;
+        }
         // 마우스 클릭 시작 시 (왼쪽 버튼 클릭)
         if (Input.GetMouseButtonDown(0))
         {
