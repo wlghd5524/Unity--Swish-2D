@@ -7,18 +7,31 @@ using UnityEngine.UI;
 
 public class UIManager : MonoBehaviour
 {
+    public static UIManager Instance;
     public GameObject replayPopupPanel;
     public GameObject homePopupPanel;
-    // Start is called before the first frame update
-    void Start()
+    public GameObject itemUI;
+    public Slider itemSlider;
+
+    private void Awake()
     {
-        
+        Instance = this;
+    }
+    void OnEnable()
+    {
+        itemUI = GameObject.Find("Canvas/Item");
+        itemUI.SetActive(false);
+        itemSlider = itemUI.GetComponentInChildren<Slider>();
     }
 
     // Update is called once per frame
     void Update()
     {
-        
+        if (itemSlider.IsActive() && itemSlider.value == 0)
+        {
+            itemUI.SetActive(false);
+            ItemManager.Instance.currentItemState = ItemState.Normal;
+        }
     }
     public void PressRePlayButton()
     {

@@ -73,3 +73,4 @@ crashlytics-build.properties
 
 # Private Assets
 /Assets/PrivateAssets/
+/Assets/UnityTechnologies/

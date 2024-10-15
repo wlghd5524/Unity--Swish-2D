@@ -2,12 +2,13 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-public class ThrowingBall : MonoBehaviour
+public class BallController : MonoBehaviour
 {
-    public static ThrowingBall Instance { get; private set; }
+    public static BallController Instance { get; private set; }
     private Vector3 initialPosition;    // 공의 초기 위치
     public Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
     public LineRenderer[] trajectoryLines;  // 공의 궤도 예측선
+    public GameObject fireEffect;
 
     // 던지기 힘 계수
     public float baseThrowForce;     // 기본 힘 크기
@@ -19,19 +20,9 @@ public class ThrowingBall : MonoBehaviour
     private Vector3 startMousePosition; // 드래그 시작 위치
     private Vector3 endMousePosition;   // 드래그 끝 위치
 
-    public GameObject hoop;
-    public GameObject rim;
-    public GameObject net;
-    public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
-    public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
-    public EdgeCollider2D netLeftCollider;   //그물의 왼쪽 콜라이더
-    public EdgeCollider2D netRightCollider;  //그물의 오른쪽 콜라이더
-    public Transform rimTopPoint;        // 림의 상단 지점을 표시하는 Transform
     public Transform ballBottomPoint;
-    public SpriteRenderer rimSpriteRenderer; // 림의 SpriteRenderer
-    public SpriteRenderer ballSpriteRenderer; // 공의 SpriteRenderer
-    public SpriteRenderer netSpriteRenderer; // 그물의 SpriteRenderer
 
+    public SpriteRenderer[] ballSpriteRenderers; // 공의 SpriteRenderer
 
     public float minScale;        // 공의 최소 크기
     public float maxScale;          // 공의 최대 크기
@@ -43,13 +34,7 @@ public class ThrowingBall : MonoBehaviour
     public Vector2 ballMinForceForTrajectoryLine; //앞 림을 넘어가기 위한 최소 힘
     public Vector2 ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
 
-    public GameObject windArrow;
-    public TextMeshProUGUI windVelocityText;
-    public bool windOn;
-    public float windForce;
-    public Vector2 windDirection;
-
-    private bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
+    public bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
     private bool hasScored = false;
     private int consecutiveGoals = 0;
     private bool hitRim = false;
@@ -57,14 +42,10 @@ public class ThrowingBall : MonoBehaviour
     private bool isScaling = false;     // 공의 크기 변화가 진행 중인지 확인
     private float currentScaleTime = 0f; // 크기 변화에 사용될 타이머
 
-    public List<AudioClip> netSounds;
-    public List<AudioClip> rimSounds;
     public List<AudioClip> resetSounds;
     public List<AudioClip> catchingSounds;
     public AudioClip whistleSound;
     public AudioSource ballAudio;
-    public AudioSource rimAudio;
-    public AudioSource netAudio;
 
     private void Awake()
     {
@@ -73,22 +54,15 @@ public class ThrowingBall : MonoBehaviour
 
     void OnEnable()
     {
-        hoop = GameObject.Find("Hoop");
-        rim = GameObject.Find("Hoop/Rim");
-        net = GameObject.Find("Hoop/Net");
-        rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
-        rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
-        netLeftCollider = GameObject.Find("Hoop/Net/NetLeftCollider").GetComponent<EdgeCollider2D>();
-        netRightCollider = GameObject.Find("Hoop/Net/NetRightCollider").GetComponent<EdgeCollider2D>();
-        rimTopPoint = rim.transform.Find("RimTopPoint");
         ballBottomPoint = transform.Find("BallBottomPoint");
-        rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
-        ballSpriteRenderer = GetComponent<SpriteRenderer>();
-        netSpriteRenderer = net.GetComponent<SpriteRenderer>();
+        ballSpriteRenderers = transform.GetComponentsInChildren<SpriteRenderer>();
         rb = GetComponent<Rigidbody2D>();
         initialPosition = transform.position; // 공의 초기 위치 저장
         rb.gravityScale = 1;            // 중력 활성화
         rb.isKinematic = true;          // 초기에는 공이 움직이지 않도록 설정
+
+        fireEffect = transform.Find("FlamesParticleEffect").gameObject;
+        fireEffect.SetActive(false);
 
         // LineRenderer 설정
         trajectoryLines = GetComponentsInChildren<LineRenderer>();
@@ -106,28 +80,19 @@ public class ThrowingBall : MonoBehaviour
         trajectoryLines[1].startColor = new Color(1f, 0.5f, 0f); // 주황색
         trajectoryLines[1].endColor = Color.red;
 
-
-        // 시작할 때는 림의 충돌 비활성화
-        rimLeftCollider.enabled = false;
-        rimRightCollider.enabled = false;
-
         // 초기에는 공이 림보다 위에 그려지도록 설정
-        ballSpriteRenderer.sortingOrder = 3;
-        rimSpriteRenderer.sortingOrder = 2;
-        netSpriteRenderer.sortingOrder = 2;
+        ballSpriteRenderers[0].sortingOrder = 3;
+        ballSpriteRenderers[1].sortingOrder = 3;
+        ballSpriteRenderers[2].sortingOrder = 3;
+        HoopController.Instance.rimSpriteRenderer.sortingOrder = 2;
+        HoopController.Instance.netSpriteRenderer.sortingOrder = 2;
 
-        windArrow = GameObject.Find("Canvas/Wind/WindArrow");
-        windVelocityText = GameObject.Find("Canvas/Wind/WindVelocity").GetComponent<TextMeshProUGUI>();
-        windOn = false;
-
-        rimAudio = rim.GetComponent<AudioSource>();
         ballAudio = GetComponent<AudioSource>();
-        netAudio = net.GetComponent<AudioSource>();
     }
 
     void Update()
     {
-        if(TimeManager.Instance.hasCalledGameOver)
+        if (TimeManager.Instance.hasCalledGameOver)
         {
             return;
         }
@@ -209,21 +174,26 @@ public class ThrowingBall : MonoBehaviour
         // 공이 림을 완전히 넘어가기 전에는 공이 림보다 위에 그려지도록 설정
         if (!hasPassedRim)
         {
-            ballSpriteRenderer.sortingOrder = 3;
-            rimSpriteRenderer.sortingOrder = 2;
-            netSpriteRenderer.sortingOrder = 2;
+            ballSpriteRenderers[0].sortingOrder = 3;
+            ballSpriteRenderers[1].sortingOrder = 3;
+            ballSpriteRenderers[2].sortingOrder = 3;
+
+            HoopController.Instance.rimSpriteRenderer.sortingOrder = 2;
+            HoopController.Instance.netSpriteRenderer.sortingOrder = 2;
         }
         else
         {
             // 공이 림을 넘어간 후에는 림이 공보다 위에 그려지도록 설정
-            ballSpriteRenderer.sortingOrder = 2;
-            rimSpriteRenderer.sortingOrder = 3;
-            netSpriteRenderer.sortingOrder = 3;
+            ballSpriteRenderers[0].sortingOrder = 2;
+            ballSpriteRenderers[1].sortingOrder = 2;
+            ballSpriteRenderers[2].sortingOrder = 2;
 
+            HoopController.Instance.rimSpriteRenderer.sortingOrder = 3;
+            HoopController.Instance.netSpriteRenderer.sortingOrder = 3;
         }
 
         // 공이 림 위를 완전히 넘어갔는지 확인
-        if (ballBottomPoint.position.y > rimTopPoint.position.y && ballForce.magnitude > ballMinForceForTrajectoryLine.magnitude)
+        if (ballBottomPoint.position.y > HoopController.Instance.rimTopPoint.position.y && ballForce.magnitude > ballMinForceForTrajectoryLine.magnitude)
         {
             hasPassedRim = true; // 림 위를 완전히 넘어감
         }
@@ -234,34 +204,29 @@ public class ThrowingBall : MonoBehaviour
             //공이 너무 세면 백보드를 넘어가 공이 백보드 뒤에 그려지도록 설정
             if (ballForce.magnitude > ballMaxForceForTrajectoryLine.magnitude)
             {
-                ballSpriteRenderer.sortingOrder = 0;
+                ballSpriteRenderers[0].sortingOrder = 0;
+                ballSpriteRenderers[1].sortingOrder = 0;
+                ballSpriteRenderers[2].sortingOrder = 0;
             }
             else
             {
-                rimLeftCollider.enabled = true;
-                rimRightCollider.enabled = true;
-                netLeftCollider.enabled = true;
-                netRightCollider.enabled = true;
+                HoopController.Instance.rimLeftCollider.enabled = true;
+                HoopController.Instance.rimRightCollider.enabled = true;
+                HoopController.Instance.netLeftCollider.enabled = true;
+                HoopController.Instance.netMiddleCollider.enabled = true;
+                HoopController.Instance.netRightCollider.enabled = true;
             }
 
         }
         else
         {
-            rimLeftCollider.enabled = false;
-            rimRightCollider.enabled = false;
-            netLeftCollider.enabled = false;
-            netRightCollider.enabled = false;
+            HoopController.Instance.rimLeftCollider.enabled = false;
+            HoopController.Instance.rimRightCollider.enabled = false;
+            HoopController.Instance.netLeftCollider.enabled = false;
+            HoopController.Instance.netMiddleCollider.enabled= false;
+            HoopController.Instance.netRightCollider.enabled = false;
         }
-        if (windOn)
-        {
-            windArrow.transform.parent.gameObject.SetActive(true);
 
-            ApplyWindEffect();
-        }
-        else
-        {
-            windArrow.transform.parent.gameObject.SetActive(false);
-        }
     }
 
     void LateUpdate()
@@ -272,13 +237,7 @@ public class ThrowingBall : MonoBehaviour
         ballBottomPoint.localRotation = Quaternion.identity; // 로컬 회전값 초기화
     }
 
-    // 바람의 영향을 적용하는 함수
-    void ApplyWindEffect()
-    {
-        // 바람의 세기에 따라 X축으로 힘을 가함
-        Vector2 windEffect = windDirection * windForce * Time.deltaTime;
-        rb.AddForce(windEffect, ForceMode2D.Force);
-    }
+
 
     //공의 예상 궤적 그리기
     private void UpdateTrajectory(Vector2 force)
@@ -315,15 +274,18 @@ public class ThrowingBall : MonoBehaviour
             trajectoryLines[0].SetPosition(i, pointPosition);
         }
 
-        // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
-        trajectoryLines[1].positionCount = pointCount - peakIndex;
-        trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
-
-        for (int i = peakIndex + 1; i < pointCount; i++)
+        if (!WeatherManager.Instance.fogOn)
         {
-            float t = i * timeSlot;
-            Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
-            trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
+            // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
+            trajectoryLines[1].positionCount = pointCount - peakIndex;
+            trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
+
+            for (int i = peakIndex + 1; i < pointCount; i++)
+            {
+                float t = i * timeSlot;
+                Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
+                trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
+            }
         }
 
         // 앞부분 궤도는 림보다 앞에 렌더링
@@ -376,30 +338,12 @@ public class ThrowingBall : MonoBehaviour
         //골이 들어갔을 때
         if (collision.gameObject.CompareTag("Net") && !hasScored)
         {
-            rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
-            netAudio.clip = netSounds[Random.Range(0, netSounds.Count)];
-            netAudio.Play();
-            // 림에 맞았으면 20점, 안 맞았으면 30점
-            if (hitRim)
-            {
-                ScoreManager.Instance.AddScore(20);
-            }
-            else
-            {
-                ScoreManager.Instance.AddScore(30);
-            }
-            consecutiveGoals++;
-            if (consecutiveGoals >= 2)
-            {
-                ScoreManager.Instance.AddScore(consecutiveGoals * 10);
-            }
-            hasScored = true;
-            hitRim = false;
+            Goal();
         }
         if (collision.gameObject.CompareTag("Rim"))
         {
-            rimAudio.clip = rimSounds[Random.Range(0, rimSounds.Count)];
-            rimAudio.Play();
+            HoopController.Instance.rimAudio.clip = HoopController.Instance.rimSounds[Random.Range(0, HoopController.Instance.rimSounds.Count)];
+            HoopController.Instance.rimAudio.Play();
             hitRim = true;
         }
     }
@@ -422,8 +366,46 @@ public class ThrowingBall : MonoBehaviour
             }
             ResetBall(); // 공 리셋 함수 호출
         }
+        //골이 들어갔을 때
+        if (collision.gameObject.CompareTag("Net") && !hasScored)
+        {
+            Goal();
+        }
+        if (collision.gameObject.CompareTag("Item"))
+        {
+            ItemManager.Instance.currentItemState = ItemManager.Instance.currentItem;
+            foreach (var item in ItemManager.Instance.itemImages)
+            {
+                item.gameObject.SetActive(false);
+            }
+            ItemManager.Instance.itemGameObject.SetActive(false);
+            UIManager.Instance.itemUI.transform.GetChild((int)ItemManager.Instance.currentItem).gameObject.SetActive(true);
+            UIManager.Instance.itemUI.SetActive(true);
+        }
     }
 
+    private void Goal()
+    {
+        rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
+        HoopController.Instance.netAudio.clip = HoopController.Instance.netSounds[Random.Range(0, HoopController.Instance.netSounds.Count)];
+        HoopController.Instance.netAudio.Play();
+        // 림에 맞았으면 20점, 안 맞았으면 30점
+        if (hitRim)
+        {
+            ScoreManager.Instance.AddScore(20);
+        }
+        else
+        {
+            ScoreManager.Instance.AddScore(30);
+        }
+        consecutiveGoals++;
+        if (consecutiveGoals >= 2)
+        {
+            ScoreManager.Instance.AddScore(consecutiveGoals * 10);
+        }
+        hasScored = true;
+        hitRim = false;
+    }
     // 공 리셋 함수
     private void ResetBall()
     {
@@ -442,8 +424,8 @@ public class ThrowingBall : MonoBehaviour
         currentScaleTime = 0f;
 
         // 림의 콜라이더 비활성화
-        rimLeftCollider.enabled = false;
-        rimRightCollider.enabled = false;
+        HoopController.Instance.rimLeftCollider.enabled = false;
+        HoopController.Instance.rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
         if (!hasScored)
         {
@@ -451,7 +433,7 @@ public class ThrowingBall : MonoBehaviour
         }
         hasScored = false;
 
-        hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
+        HoopController.Instance.hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
 
 
         // 기준이 되는 림의 위치와 그에 따른 힘 (림의 초기 위치와 힘)
@@ -460,7 +442,7 @@ public class ThrowingBall : MonoBehaviour
         Vector2 referenceMaxForce = new Vector2(0f, 12.5f);    // 기준 림 위치에서 넘지 않도록 할 최대 힘
 
         // 현재 림의 위치 가져오기
-        Vector2 currentRimPosition = hoop.transform.position;
+        Vector2 currentRimPosition = HoopController.Instance.hoop.transform.position;
 
         // 림의 위치 차이 벡터 계산
         Vector2 rimPositionDifference = currentRimPosition - referenceRimPosition;
@@ -469,23 +451,8 @@ public class ThrowingBall : MonoBehaviour
         ballMinForceForTrajectoryLine = referenceMinForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
         ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
 
-        if (ScoreManager.Instance.currentScore >= 100)
-        {
-            windOn = true;
-        }
-        windForce = Random.Range(1, 6) * 10; // 10 ~ 100 사이의 랜덤 값으로 바람의 세기를 설정
-        windVelocityText.text = ((int)(windForce / 10)).ToString();
-        // 50% 확률로 왼쪽 또는 오른쪽 방향 설정
-        if (Random.Range(0, 2) == 0) // 0 또는 1이 랜덤으로 선택됨
-        {
-            windDirection = Vector2.left; // 왼쪽 방향
-            windArrow.transform.eulerAngles = new Vector3(0, 0, 90);
-        }
-        else
-        {
-            windDirection = Vector2.right; // 오른쪽 방향
-            windArrow.transform.eulerAngles = new Vector3(0, 0, -90);
-        }
+        WeatherManager.Instance.WindInit();
+
         //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
         //ballAudio.Play();
     }

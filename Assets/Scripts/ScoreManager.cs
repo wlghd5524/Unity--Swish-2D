@@ -33,6 +33,10 @@ public class ScoreManager : MonoBehaviour
     // 점수 업데이트 함수
     public void AddScore(int value)
     {
+        if (ItemManager.Instance.currentItemState == ItemState.Goldenball)
+        {
+            value *= 2;
+        }
         currentScore += value;
         UpdateScoreText();
     }

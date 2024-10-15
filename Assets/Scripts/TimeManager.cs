@@ -55,7 +55,7 @@ public class TimeManager : MonoBehaviour
                     audioSource.Play();
                     hasPlayedEndSound = true;
                 }
-                if (ThrowingBall.Instance.rb.velocity.sqrMagnitude == 0 && !hasCalledGameOver)
+                if (BallController.Instance.rb.velocity.sqrMagnitude == 0 && !hasCalledGameOver)
                 {
                     GameManager.Instance.GameOver();
                     hasCalledGameOver = true;
