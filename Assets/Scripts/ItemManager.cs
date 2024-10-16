@@ -6,8 +6,8 @@ public enum ItemState
 {
     Fireball,
     Goldenball,
-    Goggle,
     GiantRim,
+    Goggle,
     Normal
 }
 
@@ -18,6 +18,8 @@ public class ItemManager : MonoBehaviour
     public ItemState currentItem;
     public GameObject itemGameObject;
     public List<GameObject> itemImages = new List<GameObject>();
+    float currentSpeed = 0;
+    public int itemIndex;
     private void Awake()
     {
         Instance = this;
@@ -35,17 +37,29 @@ public class ItemManager : MonoBehaviour
     }
 
     // Update is called once per frame
-    void Update()
+    void FixedUpdate()
     {
-        itemImages[(int)currentItem].SetActive(true);
-
         if (currentItemState == ItemState.Fireball)
         {
-            BallController.Instance.fireEffect.gameObject.SetActive(true);
+            BallController.Instance.fireEffectGameObject.gameObject.SetActive(true);
+            Vector2 rimPosition = HoopController.Instance.rim.transform.position;
+            Vector2 ballPosition = BallController.Instance.transform.position;
+            Vector2 direction = (rimPosition - ballPosition).normalized;
+            
+            if (!BallController.Instance.hasScored && BallController.Instance.rb.velocity.y < 0)
+            {
+                currentSpeed = Mathf.Min(currentSpeed + 20f * Time.fixedDeltaTime, 100f);
+                Vector2 newPosition = Vector2.MoveTowards(ballPosition, rimPosition, currentSpeed * Time.fixedDeltaTime);
+                BallController.Instance.rb.MovePosition(newPosition);
+            }
+            else if(BallController.Instance.hasScored)
+            {
+                currentSpeed = 0;
+            }
         }
         else
         {
-            BallController.Instance.fireEffect.gameObject.SetActive(false);
+            BallController.Instance.fireEffectGameObject.gameObject.SetActive(false);
         }
         if (currentItemState == ItemState.Goldenball)
         {
@@ -67,7 +81,34 @@ public class ItemManager : MonoBehaviour
         }
         if (currentItemState == ItemState.Goggle)
         {
-            WeatherManager.Instance.fogOn = false;
+            WeatherManager.Instance.isFoggy = false;
+        }
+    }
+
+    public void ItemUpdate()
+    {
+        if (currentItemState == ItemState.Normal && BallController.Instance.ballThrowCountForItem == 4)
+        {
+            for (int i = 0; i < itemImages.Count; i++)
+            {
+                if (i == itemIndex)
+                {
+                    itemImages[i].SetActive(true);
+                }
+                else
+                {
+                    itemImages[i].SetActive(false);
+                }
+            }
+            itemGameObject.SetActive(true);
+            currentItem = (ItemState)itemIndex++;
+
+        }
+        else if (currentItemState != ItemState.Normal && BallController.Instance.ballThrowCountForItem == 3)
+        {
+            currentItemState = ItemState.Normal;
+            BallController.Instance.ballThrowCountForItem = 0;
+            UIManager.Instance.itemUI.SetActive(false);
         }
     }
 }

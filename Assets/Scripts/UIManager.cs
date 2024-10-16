@@ -11,7 +11,7 @@ public class UIManager : MonoBehaviour
     public GameObject replayPopupPanel;
     public GameObject homePopupPanel;
     public GameObject itemUI;
-    public Slider itemSlider;
+    //public Slider itemSlider;
 
     private void Awake()
     {
@@ -21,17 +21,17 @@ public class UIManager : MonoBehaviour
     {
         itemUI = GameObject.Find("Canvas/Item");
         itemUI.SetActive(false);
-        itemSlider = itemUI.GetComponentInChildren<Slider>();
+        //itemSlider = itemUI.GetComponentInChildren<Slider>();
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (itemSlider.IsActive() && itemSlider.value == 0)
-        {
-            itemUI.SetActive(false);
-            ItemManager.Instance.currentItemState = ItemState.Normal;
-        }
+        //if (itemSlider.IsActive() && itemSlider.value == 0)
+        //{
+        //    itemUI.SetActive(false);
+        //    ItemManager.Instance.currentItemState = ItemState.Normal;
+        //}
     }
     public void PressRePlayButton()
     {

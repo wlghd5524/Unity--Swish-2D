@@ -13,6 +13,9 @@ public class GameManager : MonoBehaviour
     public Button howToPlayButton;
     public Button rankingButton;
     public Button quitButton;
+    public GameObject quitPopup;
+    public Button quitCancelButton;
+    public Button quitConfirmButton;
     public Button signInButton;
 
     public GameObject loginPanel;
@@ -20,6 +23,7 @@ public class GameManager : MonoBehaviour
     public GameObject RankingListItemPrefab;
     private List<GameObject> rankingItems = new List<GameObject>();
     public Transform rankingItemsTransform;
+    public Button rankingCloseButton;
 
     void Awake()
     {
@@ -35,6 +39,8 @@ public class GameManager : MonoBehaviour
         }
         DontDestroyOnLoad(gameObject);
         SceneManager.sceneLoaded += OnSceneLoaded;
+        QualitySettings.vSyncCount = 0;  // V-Sync 비활성화
+        Application.targetFrameRate = 60;  // 프레임 제한 설정
     }
     private void OnDestroy()
     {
@@ -52,6 +58,8 @@ public class GameManager : MonoBehaviour
             howToPlayButton = GameObject.Find("Canvas/HowToPlayButton").GetComponent<Button>();
             rankingButton = GameObject.Find("Canvas/RankingButton").GetComponent<Button>();
             quitButton = GameObject.Find("Canvas/QuitButton").GetComponent<Button>();
+            quitPopup = GameObject.Find("Canvas/QuitButtonPopup");
+            quitPopup.SetActive(false);
             loginPanel = GameObject.Find("Canvas").transform.Find("LoginPanel").gameObject;
             signInButton = loginPanel.transform.Find("Popup_Login/Popup/Button_SignIn").GetComponent<Button>();
             rankingPanel = GameObject.Find("Canvas").transform.Find("Popup_Ranking").gameObject;
@@ -91,21 +99,31 @@ public class GameManager : MonoBehaviour
     }
     void CloseHowToPlay() { }
 
-
+    Color iconFrameColor;
+    int iconIndex;
     IEnumerator OpenRanking()
     {
         yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.UpdateUsers());  // 서버에서 모든 유저 목록 불러오기
+        
         GameObject cansvas = GameObject.Find("Canvas");
         Transform rankingPanelTransform = cansvas.transform.Find("Popup_Ranking");
         rankingPanel = rankingPanelTransform.gameObject;
+        rankingCloseButton = rankingPanel.transform.Find("Popup/Popup_TopBar/Button_Close").GetComponent<Button>();
+        rankingCloseButton.onClick.AddListener(CloseRanking);
         rankingItemsTransform = rankingPanel.transform.Find("Popup/ScrollRect/Content");
         if (SceneManager.GetActiveScene().name == "GameScene")
         {
             GameObject myRankingItem = rankingPanel.transform.Find("Popup/Ranking_Me").gameObject;
             TextMeshProUGUI rankText = myRankingItem.transform.Find("Text_Rank").GetComponent<TextMeshProUGUI>();
             TextMeshProUGUI nameText = myRankingItem.transform.Find("Text_UserName").GetComponent<TextMeshProUGUI>();
-            TextMeshProUGUI userNumberText = nameText.transform.Find("Group_Text/Text_UserNumber").GetComponent<TextMeshProUGUI>();
+            TextMeshProUGUI majorText = nameText.transform.Find("Group_Text/Text_Major").GetComponent<TextMeshProUGUI>();
             TextMeshProUGUI scoreText = nameText.transform.Find("Group_Text/Text_Score").GetComponent<TextMeshProUGUI>();
+            Image iconFrame = myRankingItem.transform.Find("IconFrame").GetComponent<Image>();
+            iconFrameColor = new Color(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value);
+            iconFrame.color = iconFrameColor;
+            iconIndex = UnityEngine.Random.Range(0, 5);
+            iconFrame.transform.GetChild(iconIndex).gameObject.SetActive(true);
+
             int rank = User.users.IndexOf(LoginManager.Instance.currentUser);
             if (rank == 0)
             {
@@ -123,8 +141,8 @@ public class GameManager : MonoBehaviour
             {
                 rankText.text = (rank + 1).ToString();
             }
-            nameText.text = LoginManager.Instance.currentUser.name;
-            userNumberText.text = LoginManager.Instance.currentUser.userNumber;
+            nameText.text = $"{LoginManager.Instance.currentUser.userNumber}  {LoginManager.Instance.currentUser.name}";
+            majorText.text = LoginManager.Instance.currentUser.major;
             scoreText.text = LoginManager.Instance.currentUser.score.ToString();
         }
 
@@ -149,7 +167,21 @@ public class GameManager : MonoBehaviour
     }
     void QuitGame()
     {
+        quitPopup.SetActive(true);
+        quitCancelButton = quitPopup.transform.Find("Popup/Button_Cancel").GetComponent<Button>();
+        quitCancelButton.onClick.AddListener(PressCancelButton);
+        quitConfirmButton = quitPopup.transform.Find("Popup/Button_Ok").GetComponent<Button>();
+        quitConfirmButton.onClick.AddListener(PressConfirmButton);
+    }
 
+    void PressCancelButton()
+    {
+        quitPopup.SetActive(false);
+    }
+    void PressConfirmButton()
+    {
+        //게임 종료
+        Application.Quit();
     }
     // 랭킹 아이템 생성 함수
     private void CreateRankingItem(User user, int index)
@@ -165,8 +197,22 @@ public class GameManager : MonoBehaviour
 
         TextMeshProUGUI rankText = rankingItem.transform.Find("Text_Rank").GetComponent<TextMeshProUGUI>();
         TextMeshProUGUI nameText = rankingItem.transform.Find("Text_UserName").GetComponent<TextMeshProUGUI>();
-        TextMeshProUGUI userNumberText = nameText.transform.Find("Group_Text/Text_UserNumber").GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI majorText = nameText.transform.Find("Group_Text/Text_Major").GetComponent<TextMeshProUGUI>();
         TextMeshProUGUI scoreText = nameText.transform.Find("Group_Text/Text_Score").GetComponent<TextMeshProUGUI>();
+        Image iconFrame = rankingItem.transform.Find("IconFrame").GetComponent<Image>();
+
+        if (SceneManager.GetActiveScene().name == "GameScene" && user.userNumber == LoginManager.Instance.currentUser.userNumber)
+        {
+            iconFrame.color = iconFrameColor;
+            iconFrame.transform.GetChild(iconIndex).gameObject.SetActive(true);
+        }
+        else
+        {
+            iconFrame.color = new Color(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value);
+            iconFrame.transform.GetChild(UnityEngine.Random.Range(0, 5)).gameObject.SetActive(true);
+        }
+
+        
         if (index == 0)
         {
             rankingItem.transform.Find("Icon_Medal_Gold").gameObject.SetActive(true);
@@ -183,8 +229,8 @@ public class GameManager : MonoBehaviour
         {
             rankText.text = (index + 1).ToString();
         }
-        if (nameText != null) nameText.text = user.name;
-        if (userNumberText != null) userNumberText.text = user.userNumber;
+        if (nameText != null) nameText.text = $"{user.userNumber}  {user.name}";
+        if (majorText != null) majorText.text = user.major;
         if (scoreText != null) scoreText.text = user.score.ToString();
 
 

@@ -10,8 +10,8 @@ public class WeatherManager : MonoBehaviour
     public GameObject fogGameObject;
     public GameObject fogUI;
     public TextMeshProUGUI windVelocityText;
-    public bool windOn;
-    public bool fogOn;
+    public bool isWindy;
+    public bool isFoggy;
     public float windForce;
     public Vector2 windDirection;
 
@@ -25,17 +25,17 @@ public class WeatherManager : MonoBehaviour
     {
         windArrow = GameObject.Find("Canvas/Wind/WindArrow");
         windVelocityText = GameObject.Find("Canvas/Wind/WindVelocity").GetComponent<TextMeshProUGUI>();
-        windOn = false;
+        isWindy = false;
 
         fogGameObject = GameObject.Find("Fog");
         fogUI = GameObject.Find("Canvas/FogUI");
-        fogOn = false;
+        isFoggy = false;
     }
 
     // Update is called once per frame
     void Update()
     {
-        if (windOn)
+        if (isWindy)
         {
             windArrow.transform.parent.gameObject.SetActive(true);
             ApplyWindEffect();
@@ -46,9 +46,9 @@ public class WeatherManager : MonoBehaviour
         }
         if (ItemManager.Instance.currentItemState != ItemState.Goggle && ScoreManager.Instance.currentScore > 500)
         {
-            fogOn = true;
+            isFoggy = true;
         }
-        if (fogOn)
+        if (isFoggy)
         {
             fogGameObject.SetActive(true);
             fogUI.SetActive(true);
@@ -72,7 +72,7 @@ public class WeatherManager : MonoBehaviour
     {
         if (ScoreManager.Instance.currentScore >= 100)
         {
-            windOn = true;
+            isWindy = true;
         }
         windForce = Random.Range(1, 6) * 10; // 10 ~ 100 사이의 랜덤 값으로 바람의 세기를 설정
         windVelocityText.text = ((int)(windForce / 10)).ToString();

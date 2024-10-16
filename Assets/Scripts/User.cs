@@ -5,18 +5,22 @@ using UnityEngine;
 [System.Serializable]
 public class User
 {
-    public User(string userNumber, string name)
+    public User(string userNumber, string name, string major)
     {
         this.userNumber = userNumber;
         this.name = name;
         this.score = 0;
         this.playCount = 0;
+        this.major = major;
+        this.timestamp = System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
     }
 
     public string userNumber;
     public string name;
+    public string major;
     public int score;
     public int playCount;
+    public string timestamp;
 
     // static 변수는 JSON으로 직렬화되지 않음
     public static List<User> users = new List<User>();

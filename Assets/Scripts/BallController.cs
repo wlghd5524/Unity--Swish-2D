@@ -8,7 +8,8 @@ public class BallController : MonoBehaviour
     private Vector3 initialPosition;    // 공의 초기 위치
     public Rigidbody2D rb;             // 공의 Rigidbody2D 컴포넌트
     public LineRenderer[] trajectoryLines;  // 공의 궤도 예측선
-    public GameObject fireEffect;
+    public GameObject fireEffectGameObject;
+    public ParticleSystemRenderer fireEffect;
 
     // 던지기 힘 계수
     public float baseThrowForce;     // 기본 힘 크기
@@ -35,7 +36,7 @@ public class BallController : MonoBehaviour
     public Vector2 ballMaxForceForTrajectoryLine; //백보드를 넘어가기 전 최대 힘
 
     public bool hasPassedRim = false;   // 림을 완전히 넘어갔는지 체크
-    private bool hasScored = false;
+    public bool hasScored = false;
     private int consecutiveGoals = 0;
     private bool hitRim = false;
 
@@ -46,7 +47,9 @@ public class BallController : MonoBehaviour
     public List<AudioClip> catchingSounds;
     public AudioClip whistleSound;
     public AudioSource ballAudio;
+    public AudioSource resetAudio;
 
+    public int ballThrowCountForItem = 0;
     private void Awake()
     {
         Instance = this;
@@ -61,8 +64,9 @@ public class BallController : MonoBehaviour
         rb.gravityScale = 1;            // 중력 활성화
         rb.isKinematic = true;          // 초기에는 공이 움직이지 않도록 설정
 
-        fireEffect = transform.Find("FlamesParticleEffect").gameObject;
-        fireEffect.SetActive(false);
+        fireEffectGameObject = transform.Find("FlamesParticleEffect").gameObject;
+        fireEffect = fireEffectGameObject.GetComponent<ParticleSystemRenderer>();
+        fireEffectGameObject.SetActive(false);
 
         // LineRenderer 설정
         trajectoryLines = GetComponentsInChildren<LineRenderer>();
@@ -88,9 +92,10 @@ public class BallController : MonoBehaviour
         HoopController.Instance.netSpriteRenderer.sortingOrder = 2;
 
         ballAudio = GetComponent<AudioSource>();
+        resetAudio = GameObject.Find("ResetZones").GetComponent<AudioSource>();
     }
 
-    void Update()
+    void FixedUpdate()
     {
         if (TimeManager.Instance.hasCalledGameOver)
         {
@@ -143,13 +148,17 @@ public class BallController : MonoBehaviour
             // 드래그한 거리와 방향 계산
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
-
-
+                                                       // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
             float forceMaginitude = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
-            // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
             ballForce = throwDirection * forceMaginitude;
+
+            if (ItemManager.Instance.currentItemState == ItemState.Fireball)
+            {
+                throwDirection = new Vector2(0, dragVector.y).normalized;
+                ballForce = new Vector2(0, throwDirection.y * ballMaxForceForTrajectoryLine.y);
+            }
 
             // 공에 힘을 가하여 던지기
             rb.AddForce(ballForce, ForceMode2D.Impulse);
@@ -163,6 +172,7 @@ public class BallController : MonoBehaviour
 
             isScaling = true;
             TimeManager.Instance.timeOn = true;
+            ballThrowCountForItem++;
         }
 
         // 공이 날아가는 동안 크기 변화
@@ -223,10 +233,10 @@ public class BallController : MonoBehaviour
             HoopController.Instance.rimLeftCollider.enabled = false;
             HoopController.Instance.rimRightCollider.enabled = false;
             HoopController.Instance.netLeftCollider.enabled = false;
-            HoopController.Instance.netMiddleCollider.enabled= false;
+            HoopController.Instance.netMiddleCollider.enabled = false;
             HoopController.Instance.netRightCollider.enabled = false;
         }
-
+        //fireEffect.sortingOrder = ballSpriteRenderers[1].sortingOrder;
     }
 
     void LateUpdate()
@@ -248,12 +258,15 @@ public class BallController : MonoBehaviour
         Vector2 velocity = force / rb.mass;
         float gravity = Physics2D.gravity.magnitude;
 
+        // 안개 상태일 때 보이는 궤도 포인트의 최대 수 계산 (2/3 지점까지만 보이게)
+        int visiblePointCount = WeatherManager.Instance.isFoggy ? Mathf.FloorToInt(pointCount / 2f) : pointCount;
+
         // 최고점 Y 좌표 찾기
         float highestY = float.MinValue;
         int peakIndex = 0;
 
         // 최고점 찾기
-        for (int i = 0; i < pointCount; i++)
+        for (int i = 0; i < visiblePointCount; i++)
         {
             float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
@@ -273,19 +286,16 @@ public class BallController : MonoBehaviour
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
             trajectoryLines[0].SetPosition(i, pointPosition);
         }
+        // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
+        trajectoryLines[1].positionCount = visiblePointCount - peakIndex;
+        trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
 
-        if (!WeatherManager.Instance.fogOn)
+        for (int i = peakIndex + 1; i < visiblePointCount; i++)
         {
-            // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
-            trajectoryLines[1].positionCount = pointCount - peakIndex;
-            trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
+            float t = i * timeSlot;
+            Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
+            trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
 
-            for (int i = peakIndex + 1; i < pointCount; i++)
-            {
-                float t = i * timeSlot;
-                Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
-                trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
-            }
         }
 
         // 앞부분 궤도는 림보다 앞에 렌더링
@@ -356,13 +366,13 @@ public class BallController : MonoBehaviour
         {
             if (collision.gameObject.name == "ResetBottomZone")
             {
-                ballAudio.clip = resetSounds[Random.Range(0, resetSounds.Count)];
-                ballAudio.Play();
+                resetAudio.clip = resetSounds[Random.Range(0, resetSounds.Count)];
+                resetAudio.Play();
             }
             else
             {
-                ballAudio.clip = whistleSound;
-                ballAudio.Play();
+                resetAudio.clip = whistleSound;
+                resetAudio.Play();
             }
             ResetBall(); // 공 리셋 함수 호출
         }
@@ -373,13 +383,25 @@ public class BallController : MonoBehaviour
         }
         if (collision.gameObject.CompareTag("Item"))
         {
+            ballThrowCountForItem = 0;
             ItemManager.Instance.currentItemState = ItemManager.Instance.currentItem;
             foreach (var item in ItemManager.Instance.itemImages)
             {
                 item.gameObject.SetActive(false);
             }
             ItemManager.Instance.itemGameObject.SetActive(false);
-            UIManager.Instance.itemUI.transform.GetChild((int)ItemManager.Instance.currentItem).gameObject.SetActive(true);
+            for(int i = 0;i< UIManager.Instance.itemUI.transform.childCount;i++)
+            {
+                if(i == (int)ItemManager.Instance.currentItem)
+                {
+                    UIManager.Instance.itemUI.transform.GetChild(i).gameObject.SetActive(true);
+                }
+                else
+                {
+                    UIManager.Instance.itemUI.transform.GetChild(i).gameObject.SetActive(false);
+                }
+            }
+            
             UIManager.Instance.itemUI.SetActive(true);
         }
     }
@@ -452,7 +474,9 @@ public class BallController : MonoBehaviour
         ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
 
         WeatherManager.Instance.WindInit();
+        ItemManager.Instance.ItemUpdate();
 
+        
         //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
         //ballAudio.Play();
     }

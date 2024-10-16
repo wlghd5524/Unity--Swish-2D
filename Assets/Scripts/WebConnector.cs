@@ -28,9 +28,9 @@ public class WebConnector : MonoBehaviour
     private string apiUrl = "https://localhost:7052/api/User"; // 새로운 API 엔드포인트
 
     // 서버에서 유저 정보를 가져옴
-    public IEnumerator Login(string userNumber, string name)
+    public IEnumerator Login(string userNumber, string name, string major)
     {
-        yield return StartCoroutine(GetUser(userNumber, name));
+        yield return StartCoroutine(GetUser(userNumber, name, major));
         if (LoginManager.Instance.currentUser != null && LoginManager.Instance.currentUser.playCount < 3)
         {
             LoginManager.Instance.loginSuccess = true;
@@ -44,11 +44,20 @@ public class WebConnector : MonoBehaviour
     public IEnumerator UpdateUsers()
     {
         yield return StartCoroutine(GetAllUsers());
-        User.users.Sort((x, y) => y.score.CompareTo(x.score)); // 점수를 기준으로 내림차순 정렬
+        User.users.Sort((x, y) =>
+        {
+            int scoreComparison = y.score.CompareTo(x.score);
+            if (scoreComparison != 0) return scoreComparison;
+
+            int playCountComparison = x.playCount.CompareTo(y.playCount);
+            if (playCountComparison != 0) return playCountComparison;
+
+            return x.timestamp.CompareTo(y.timestamp);
+        });
     }
 
 
-    IEnumerator GetUser(string userNumber, string name)
+    IEnumerator GetUser(string userNumber, string name, string major)
     {
         // GET 요청 준비 (UserNumber를 URL 경로에 포함)
         UnityWebRequest www = UnityWebRequest.Get(apiUrl + $"/get_user/{userNumber}");
@@ -71,7 +80,7 @@ public class WebConnector : MonoBehaviour
             {
                 // 유저가 없을 때 처리할 로직
                 Debug.Log("User not found.");
-                LoginManager.Instance.currentUser = new User(userNumber, name);
+                LoginManager.Instance.currentUser = new User(userNumber, name, major);
             }
             else
             {

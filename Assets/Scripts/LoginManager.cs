@@ -11,6 +11,7 @@ public class LoginManager : MonoBehaviour
     public int maxPlayCount = 3;
     public TMP_InputField userNumberInputField;
     public TMP_InputField nameInputField;
+    public TMP_InputField majorInputField;
     public TextMeshProUGUI loginMessageText;
     public User currentUser;
     public Toggle rememberToggle;
@@ -47,6 +48,7 @@ public class LoginManager : MonoBehaviour
     {
         string studentNumber = userNumberInputField.text; // 입력된 학생 번호 가져오기
         string name = nameInputField.text;
+        string major = majorInputField.text;
         if (studentNumber.Length == 8 && int.TryParse(studentNumber, out _)) // 8자리 숫자인지 확인
         {
             if (name.Length == 0 || !IsKorean(name))
@@ -60,7 +62,7 @@ public class LoginManager : MonoBehaviour
                 loginMessageText.color = Color.yellow;
                 loginMessageText.text = "Loading..";
                 Debug.Log("학생 번호가 유효합니다.");
-                yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.Login(studentNumber, name));
+                yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.Login(studentNumber, name, major));
                 if (loginSuccess)
                 {
                     //로그인 성공
