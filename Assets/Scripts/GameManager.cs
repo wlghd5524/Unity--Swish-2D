@@ -9,6 +9,7 @@ using UnityEngine.UI;
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
+    public GameObject canvas;
     public Button startButton;
     public Button howToPlayButton;
     public Button rankingButton;
@@ -24,6 +25,13 @@ public class GameManager : MonoBehaviour
     private List<GameObject> rankingItems = new List<GameObject>();
     public Transform rankingItemsTransform;
     public Button rankingCloseButton;
+    public Button loginCloseButton;
+
+    public GameObject howToPlayPopup;
+    public Button howToPlayCloseButton;
+    public Button returnPage;
+    public Button nextPage;
+    List<GameObject> pages = new List<GameObject>();
 
     void Awake()
     {
@@ -54,15 +62,30 @@ public class GameManager : MonoBehaviour
         // 씬 이름에 따라 다른 함수 호출
         if (scene.name == "MainScene")
         {
+            canvas = GameObject.Find("Canvas");
             startButton = GameObject.Find("Canvas/StartButton").GetComponent<Button>();
             howToPlayButton = GameObject.Find("Canvas/HowToPlayButton").GetComponent<Button>();
             rankingButton = GameObject.Find("Canvas/RankingButton").GetComponent<Button>();
             quitButton = GameObject.Find("Canvas/QuitButton").GetComponent<Button>();
-            quitPopup = GameObject.Find("Canvas/QuitButtonPopup");
+
+            quitPopup = canvas.transform.Find("QuitButtonPopup").gameObject;
             quitPopup.SetActive(false);
-            loginPanel = GameObject.Find("Canvas").transform.Find("LoginPanel").gameObject;
+
+            howToPlayPopup = canvas.transform.Find("HowToPlayPopup").gameObject;
+            howToPlayCloseButton = howToPlayPopup.transform.Find("Button_Close").GetComponent<Button>();
+            returnPage = howToPlayPopup.transform.Find("Button_ReturnPage").GetComponent<Button>();
+            nextPage = howToPlayPopup.transform.Find("Button_NextPage").GetComponent<Button>();
+            foreach (Transform page in howToPlayPopup.transform.Find("Content"))
+            {
+                pages.Add(page.gameObject);
+            }
+
+
+            loginPanel = canvas.transform.Find("LoginPanel").gameObject;
             signInButton = loginPanel.transform.Find("Popup_Login/Popup/Button_SignIn").GetComponent<Button>();
-            rankingPanel = GameObject.Find("Canvas").transform.Find("Popup_Ranking").gameObject;
+            loginCloseButton = loginPanel.transform.Find("Popup_Login/Popup/Button_Close_Line").GetComponent<Button>();
+            loginCloseButton.onClick.AddListener(CloseLoginPopup);
+            rankingPanel = canvas.transform.Find("Popup_Ranking").gameObject;
             rankingItemsTransform = rankingPanel.transform.Find("Popup/ScrollRect/Content");
             startButton.onClick.AddListener(OpenLoginPopup);
             howToPlayButton.onClick.AddListener(OpenHowToPlay);
@@ -93,18 +116,49 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene("GameScene");
     }
 
+
+    int pageIdex = 0;
+
     void OpenHowToPlay()
     {
+        pageIdex = 0;
+        howToPlayCloseButton.onClick.AddListener(CloseHowToPlay);
 
+        howToPlayPopup.SetActive(true);
+        pages[pageIdex].SetActive(true);
+        returnPage.onClick.AddListener(PressReturnPage);
+        nextPage.onClick.AddListener(PressNextPage);
     }
-    void CloseHowToPlay() { }
+    void CloseHowToPlay()
+    {
+        howToPlayPopup.SetActive(false);
+    }
+
+    void PressReturnPage()
+    {
+        if (pageIdex == 0)
+        {
+            return;
+        }
+        pages[pageIdex--].SetActive(false);
+        pages[pageIdex].SetActive(true);
+    }
+    void PressNextPage()
+    {
+        if (pageIdex == pages.Count - 1)
+        {
+            return;
+        }
+        pages[pageIdex++].SetActive(false);
+        pages[pageIdex].SetActive(true);
+    }
 
     Color iconFrameColor;
     int iconIndex;
     IEnumerator OpenRanking()
     {
         yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.UpdateUsers());  // 서버에서 모든 유저 목록 불러오기
-        
+
         GameObject cansvas = GameObject.Find("Canvas");
         Transform rankingPanelTransform = cansvas.transform.Find("Popup_Ranking");
         rankingPanel = rankingPanelTransform.gameObject;
@@ -212,7 +266,7 @@ public class GameManager : MonoBehaviour
             iconFrame.transform.GetChild(UnityEngine.Random.Range(0, 5)).gameObject.SetActive(true);
         }
 
-        
+
         if (index == 0)
         {
             rankingItem.transform.Find("Icon_Medal_Gold").gameObject.SetActive(true);

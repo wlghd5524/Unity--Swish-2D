@@ -45,14 +45,14 @@ public class ItemManager : MonoBehaviour
             Vector2 rimPosition = HoopController.Instance.rim.transform.position;
             Vector2 ballPosition = BallController.Instance.transform.position;
             Vector2 direction = (rimPosition - ballPosition).normalized;
-            
+
             if (!BallController.Instance.hasScored && BallController.Instance.rb.velocity.y < 0)
             {
                 currentSpeed = Mathf.Min(currentSpeed + 20f * Time.fixedDeltaTime, 100f);
                 Vector2 newPosition = Vector2.MoveTowards(ballPosition, rimPosition, currentSpeed * Time.fixedDeltaTime);
                 BallController.Instance.rb.MovePosition(newPosition);
             }
-            else if(BallController.Instance.hasScored)
+            else if (BallController.Instance.hasScored)
             {
                 currentSpeed = 0;
             }
@@ -81,7 +81,7 @@ public class ItemManager : MonoBehaviour
         }
         if (currentItemState == ItemState.Goggle)
         {
-            WeatherManager.Instance.isFoggy = false;
+            WeatherManager.Instance.fogGameObject.SetActive(false);
         }
     }
 

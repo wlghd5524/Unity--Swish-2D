@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
-using Unity.VisualScripting;
 using UnityEngine.UI;
 
 public class LoginManager : MonoBehaviour
@@ -49,42 +48,49 @@ public class LoginManager : MonoBehaviour
         string studentNumber = userNumberInputField.text; // 입력된 학생 번호 가져오기
         string name = nameInputField.text;
         string major = majorInputField.text;
-        if (studentNumber.Length == 8 && int.TryParse(studentNumber, out _)) // 8자리 숫자인지 확인
+        if (major.Length != 0)
         {
-            if (name.Length == 0 || !IsKorean(name))
+            if (studentNumber.Length == 8 && int.TryParse(studentNumber, out _)) // 8자리 숫자인지 확인
             {
-                loginMessageText.color = Color.red;
-                loginMessageText.text = "Invalid Name..";
-            }
-            else
-            {
-
-                loginMessageText.color = Color.yellow;
-                loginMessageText.text = "Loading..";
-                Debug.Log("학생 번호가 유효합니다.");
-                yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.Login(studentNumber, name, major));
-                if (loginSuccess)
+                if (name.Length == 0 || !IsKorean(name))
                 {
-                    //로그인 성공
-                    currentUser.playCount++;
-                    StartCoroutine(ShowSignInSuccessMessage());
+                    loginMessageText.color = Color.red;
+                    loginMessageText.text = "Invalid Name..";
                 }
                 else
                 {
-                    loginMessageText.color = Color.red;
-                    loginMessageText.text = "You have reached your play limit..";
+                    loginMessageText.color = Color.yellow;
+                    loginMessageText.text = "Loading..";
+                    Debug.Log("학생 번호가 유효합니다.");
+                    yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.Login(studentNumber, name, major));
+                    if (loginSuccess)
+                    {
+                        //로그인 성공
+                        currentUser.playCount++;
+                        StartCoroutine(ShowSignInSuccessMessage());
+                    }
+                    else
+                    {
+                        loginMessageText.color = Color.red;
+                        loginMessageText.text = "You have reached your play limit..";
+                    }
                 }
             }
+            else
+            {
+                Debug.Log("학생 번호는 8자리 숫자여야 합니다.");
+                loginMessageText.color = Color.red;
+                loginMessageText.text = "Invalid Student number..";
+            }
+
         }
         else
         {
-            Debug.Log("학생 번호는 8자리 숫자여야 합니다.");
+            Debug.Log("학과 입력칸이 비었습니다.");
             loginMessageText.color = Color.red;
-            loginMessageText.text = "Invalid Student number..";
+            loginMessageText.text = "Invalid Major..";
         }
-
     }
-
 
     // 로그인 성공 메시지 출력하는 코루틴
     IEnumerator ShowSignInSuccessMessage()

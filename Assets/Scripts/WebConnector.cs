@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
-using static UnityEngine.UIElements.UxmlAttributeDescription;
 
 public class WebConnector : MonoBehaviour
 {
@@ -137,7 +136,7 @@ public class WebConnector : MonoBehaviour
         }
         else
         {
-            www = new UnityWebRequest(apiUrl + $"/update/{user.userNumber}","PUT");
+            www = new UnityWebRequest(apiUrl + $"/update/{user.userNumber}", "PUT");
         }
         byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonData);
         www.uploadHandler = new UploadHandlerRaw(bodyRaw);

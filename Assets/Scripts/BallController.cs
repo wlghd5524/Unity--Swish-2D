@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 
 public class BallController : MonoBehaviour
@@ -259,7 +258,14 @@ public class BallController : MonoBehaviour
         float gravity = Physics2D.gravity.magnitude;
 
         // 안개 상태일 때 보이는 궤도 포인트의 최대 수 계산 (2/3 지점까지만 보이게)
-        int visiblePointCount = WeatherManager.Instance.isFoggy ? Mathf.FloorToInt(pointCount / 2f) : pointCount;
+        int visiblePointCount = pointCount;
+        if (WeatherManager.Instance.isFoggy)
+        {
+            if (ItemManager.Instance.currentItemState != ItemState.Goggle)
+            {
+                visiblePointCount = Mathf.FloorToInt(pointCount / 2f);
+            }
+        }
 
         // 최고점 Y 좌표 찾기
         float highestY = float.MinValue;
@@ -390,9 +396,9 @@ public class BallController : MonoBehaviour
                 item.gameObject.SetActive(false);
             }
             ItemManager.Instance.itemGameObject.SetActive(false);
-            for(int i = 0;i< UIManager.Instance.itemUI.transform.childCount;i++)
+            for (int i = 0; i < UIManager.Instance.itemUI.transform.childCount; i++)
             {
-                if(i == (int)ItemManager.Instance.currentItem)
+                if (i == (int)ItemManager.Instance.currentItem)
                 {
                     UIManager.Instance.itemUI.transform.GetChild(i).gameObject.SetActive(true);
                 }
@@ -401,7 +407,7 @@ public class BallController : MonoBehaviour
                     UIManager.Instance.itemUI.transform.GetChild(i).gameObject.SetActive(false);
                 }
             }
-            
+
             UIManager.Instance.itemUI.SetActive(true);
         }
     }
@@ -476,7 +482,7 @@ public class BallController : MonoBehaviour
         WeatherManager.Instance.WindInit();
         ItemManager.Instance.ItemUpdate();
 
-        
+
         //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
         //ballAudio.Play();
     }

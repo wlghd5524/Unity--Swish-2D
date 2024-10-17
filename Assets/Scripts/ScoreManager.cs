@@ -8,7 +8,7 @@ public class ScoreManager : MonoBehaviour
     public static ScoreManager Instance { get; private set; } // 싱글톤 인스턴스
     public TextMeshProUGUI scoreText;
     public int currentScore;
-    
+
     void Awake()
     {
         // 싱글톤 패턴 구현
@@ -29,7 +29,7 @@ public class ScoreManager : MonoBehaviour
         currentScore = 0;
         UpdateScoreText();
     }
-    
+
     // 점수 업데이트 함수
     public void AddScore(int value)
     {
@@ -41,7 +41,7 @@ public class ScoreManager : MonoBehaviour
         UpdateScoreText();
     }
 
-    
+
 
     // 점수 UI 업데이트 함수
     private void UpdateScoreText()

@@ -1,4 +1,3 @@
-using JetBrains.Annotations;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -49,7 +48,7 @@ public class TimeManager : MonoBehaviour
             }
             else
             {
-                if(!hasPlayedEndSound)
+                if (!hasPlayedEndSound)
                 {
                     audioSource.clip = endBuzzerSound;
                     audioSource.Play();

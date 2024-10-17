@@ -50,7 +50,14 @@ public class WeatherManager : MonoBehaviour
         }
         if (isFoggy)
         {
-            fogGameObject.SetActive(true);
+            if (ItemManager.Instance.currentItemState == ItemState.Goggle)
+            {
+                fogGameObject.SetActive(false);
+            }
+            else
+            {
+                fogGameObject.SetActive(true);
+            }
             fogUI.SetActive(true);
         }
         else
