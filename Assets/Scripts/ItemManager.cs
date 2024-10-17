@@ -87,7 +87,7 @@ public class ItemManager : MonoBehaviour
 
     public void ItemUpdate()
     {
-        if (currentItemState == ItemState.Normal && BallController.Instance.ballThrowCountForItem == 4)
+        if (currentItemState == ItemState.Normal && BallController.Instance.ballThrowCountForItem == 4 && itemIndex < 4)
         {
             for (int i = 0; i < itemImages.Count; i++)
             {

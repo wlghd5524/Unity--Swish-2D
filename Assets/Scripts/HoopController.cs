@@ -10,9 +10,7 @@ public class HoopController : MonoBehaviour
     public GameObject net;
     public Collider2D rimLeftCollider;       // 림의 왼쪽 Collider2D를 참조
     public Collider2D rimRightCollider;       // 림의 오른쪽 Collider2D를 참조
-    public EdgeCollider2D netLeftCollider;   //그물의 왼쪽 콜라이더
-    public BoxCollider2D netMiddleCollider;
-    public EdgeCollider2D netRightCollider;  //그물의 오른쪽 콜라이더
+    public Collider2D[] netColliders;
     public Transform rimTopPoint;        // 림의 상단 지점을 표시하는 Transform
     public SpriteRenderer rimSpriteRenderer; // 림의 SpriteRenderer
     public SpriteRenderer netSpriteRenderer; // 그물의 SpriteRenderer
@@ -35,9 +33,7 @@ public class HoopController : MonoBehaviour
         net = GameObject.Find("Hoop/Rim/Net");
         rimLeftCollider = rim.transform.Find("RimLeftCollider").GetComponent<Collider2D>();
         rimRightCollider = rim.transform.Find("RimRightCollider").GetComponent<Collider2D>();
-        netLeftCollider = GameObject.Find("Hoop/Rim/Net/NetLeftCollider").GetComponent<EdgeCollider2D>();
-        netMiddleCollider = GameObject.Find("Hoop/Rim/Net/NetMiddleCollider").GetComponent<BoxCollider2D>();
-        netRightCollider = GameObject.Find("Hoop/Rim/Net/NetRightCollider").GetComponent<EdgeCollider2D>();
+        netColliders = GameObject.Find("Hoop/Rim/Net").GetComponentsInChildren<Collider2D>();
         rimTopPoint = rim.transform.Find("RimTopPoint");
         rimSpriteRenderer = rim.GetComponent<SpriteRenderer>();
         netSpriteRenderer = net.GetComponent<SpriteRenderer>();

@@ -49,6 +49,9 @@ public class BallController : MonoBehaviour
     public AudioSource resetAudio;
 
     public int ballThrowCountForItem = 0;
+
+    private bool hasGetItem = false;
+
     private void Awake()
     {
         Instance = this;
@@ -155,7 +158,7 @@ public class BallController : MonoBehaviour
 
             if (ItemManager.Instance.currentItemState == ItemState.Fireball)
             {
-                throwDirection = new Vector2(0, dragVector.y).normalized;
+                throwDirection = new Vector2(0, 1).normalized;
                 ballForce = new Vector2(0, throwDirection.y * ballMaxForceForTrajectoryLine.y);
             }
 
@@ -221,9 +224,10 @@ public class BallController : MonoBehaviour
             {
                 HoopController.Instance.rimLeftCollider.enabled = true;
                 HoopController.Instance.rimRightCollider.enabled = true;
-                HoopController.Instance.netLeftCollider.enabled = true;
-                HoopController.Instance.netMiddleCollider.enabled = true;
-                HoopController.Instance.netRightCollider.enabled = true;
+                for(int i = 0; i < HoopController.Instance.netColliders.Length;i++)
+                {
+                    HoopController.Instance.netColliders[i].enabled = true;
+                }
             }
 
         }
@@ -231,9 +235,10 @@ public class BallController : MonoBehaviour
         {
             HoopController.Instance.rimLeftCollider.enabled = false;
             HoopController.Instance.rimRightCollider.enabled = false;
-            HoopController.Instance.netLeftCollider.enabled = false;
-            HoopController.Instance.netMiddleCollider.enabled = false;
-            HoopController.Instance.netRightCollider.enabled = false;
+            for (int i = 0; i < HoopController.Instance.netColliders.Length; i++)
+            {
+                HoopController.Instance.netColliders[i].enabled = false;
+            }
         }
         //fireEffect.sortingOrder = ballSpriteRenderers[1].sortingOrder;
     }
@@ -390,12 +395,13 @@ public class BallController : MonoBehaviour
         if (collision.gameObject.CompareTag("Item"))
         {
             ballThrowCountForItem = 0;
-            ItemManager.Instance.currentItemState = ItemManager.Instance.currentItem;
+            hasGetItem = true;
             foreach (var item in ItemManager.Instance.itemImages)
             {
                 item.gameObject.SetActive(false);
             }
             ItemManager.Instance.itemGameObject.SetActive(false);
+
             for (int i = 0; i < UIManager.Instance.itemUI.transform.childCount; i++)
             {
                 if (i == (int)ItemManager.Instance.currentItem)
@@ -417,15 +423,20 @@ public class BallController : MonoBehaviour
         rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
         HoopController.Instance.netAudio.clip = HoopController.Instance.netSounds[Random.Range(0, HoopController.Instance.netSounds.Count)];
         HoopController.Instance.netAudio.Play();
+        int effectIndex = 0;
         // 림에 맞았으면 20점, 안 맞았으면 30점
-        if (hitRim)
+        if (hitRim && ItemManager.Instance.currentItemState != ItemState.Fireball)
         {
+            effectIndex = Random.Range(2, 4);
             ScoreManager.Instance.AddScore(20);
         }
         else
         {
+            effectIndex = Random.Range(0, 2);
             ScoreManager.Instance.AddScore(30);
         }
+        UIManager.Instance.goalEffect[effectIndex].transform.position = HoopController.Instance.transform.position;
+        UIManager.Instance.goalEffect[effectIndex].SetActive(true);
         consecutiveGoals++;
         if (consecutiveGoals >= 2)
         {
@@ -478,11 +489,23 @@ public class BallController : MonoBehaviour
         // 림 위치에 따라 최소 및 최대 힘을 조정 (거리 비율을 적용)
         ballMinForceForTrajectoryLine = referenceMinForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
         ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
+        if(ItemManager.Instance.currentItemState == ItemState.GiantRim)
+        {
+            ballMaxForceForTrajectoryLine = new Vector2(1000f, 1000f);
+        }
 
         WeatherManager.Instance.WindInit();
+        if(hasGetItem) 
+        {
+            ItemManager.Instance.currentItemState = ItemManager.Instance.currentItem;
+            hasGetItem = false;
+        }
         ItemManager.Instance.ItemUpdate();
-
-
+        
+        foreach(GameObject effect in UIManager.Instance.goalEffect)
+        {
+            effect.SetActive(false);
+        }
         //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
         //ballAudio.Play();
     }

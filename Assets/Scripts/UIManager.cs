@@ -7,10 +7,12 @@ using UnityEngine.UI;
 
 public class UIManager : MonoBehaviour
 {
-    public static UIManager Instance;
+    public static UIManager Instance { get; private set; }
     public GameObject replayPopupPanel;
     public GameObject homePopupPanel;
     public GameObject itemUI;
+
+    public List<GameObject> goalEffect = new List<GameObject>();
     //public Slider itemSlider;
 
     private void Awake()
