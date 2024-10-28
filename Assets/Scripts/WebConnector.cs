@@ -24,7 +24,7 @@ public class WebConnector : MonoBehaviour
         DontDestroyOnLoad(gameObject);
     }
 
-    private string apiUrl = "https://localhost:7052/api/User"; // 새로운 API 엔드포인트
+    private string apiUrl = "http://gomgom5524.iptime.org:40000/api/User"; // 새로운 API 엔드포인트
 
     // 서버에서 유저 정보를 가져옴
     public IEnumerator Login(string userNumber, string name, string major)

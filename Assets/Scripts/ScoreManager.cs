@@ -11,21 +11,14 @@ public class ScoreManager : MonoBehaviour
 
     void Awake()
     {
+        Instance = this;
         // 싱글톤 패턴 구현
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
     }
 
     // Start is called before the first frame update
     void OnEnable()
     {
+        scoreText = GameObject.Find("Canvas/Score").GetComponent<TextMeshProUGUI>();
         currentScore = 0;
         UpdateScoreText();
     }

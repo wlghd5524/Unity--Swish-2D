@@ -75,6 +75,7 @@ public class GameManager : MonoBehaviour
             howToPlayCloseButton = howToPlayPopup.transform.Find("Button_Close").GetComponent<Button>();
             returnPage = howToPlayPopup.transform.Find("Button_ReturnPage").GetComponent<Button>();
             nextPage = howToPlayPopup.transform.Find("Button_NextPage").GetComponent<Button>();
+            pages.Clear();
             foreach (Transform page in howToPlayPopup.transform.Find("Content"))
             {
                 pages.Add(page.gameObject);
@@ -293,7 +294,10 @@ public class GameManager : MonoBehaviour
     }
     public void GameOver()
     {
-        LoginManager.Instance.currentUser.score = ScoreManager.Instance.currentScore;
+        if(ScoreManager.Instance.currentScore > LoginManager.Instance.currentUser.score)
+        {
+            LoginManager.Instance.currentUser.score = ScoreManager.Instance.currentScore;
+        }
         // Register 코루틴이 완료된 후 OpenRanking 실행
         StartCoroutine(SubmitDataAndOpenRanking());
     }

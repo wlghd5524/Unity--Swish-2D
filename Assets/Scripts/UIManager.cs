@@ -54,7 +54,8 @@ public class UIManager : MonoBehaviour
     {
         if (replayPopupPanel.gameObject.activeInHierarchy)
         {
-
+            LoginManager.Instance.currentUser.playCount++;
+            SceneManager.LoadScene("GameScene");
         }
         else if (homePopupPanel.gameObject.activeInHierarchy)
         {
