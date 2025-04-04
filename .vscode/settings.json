@@ -56,5 +56,6 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "Swish.sln"
+    "dotnet.defaultSolution": "Swish.sln",
+    "dotnet.preferCSharpExtension": true
 }
