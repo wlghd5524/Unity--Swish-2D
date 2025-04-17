@@ -1,45 +1,30 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Firebase.Auth;
 
 [System.Serializable]
 public class User
 {
-    public User(string userNumber, string name, string major)
+    public User(string uid, string email, string displayName, string photoUrl, int score, string timestamp)
     {
-        this.userNumber = userNumber;
-        this.name = name;
-        this.score = 0;
-        this.playCount = 0;
-        this.major = major;
-        this.timestamp = System.DateTime.Now.ToString("yyyy-MM-ddTHH:mm:ss");
+        this.uid = uid;
+        this.email = email;
+        this.displayName = displayName;
+        this.photoUrl = photoUrl;
+        this.score = score;
+        this.timestamp = timestamp;
     }
-
-    public string userNumber;
-    public string name;
-    public string major;
+    
+    public string uid;
+    public string email;
+    public string displayName;
+    public string photoUrl;
     public int score;
-    public int playCount;
     public string timestamp;
 
     // static 변수는 JSON으로 직렬화되지 않음
     public static List<User> users = new List<User>();
-
-    // Equals 메서드 재정의 (userNumber를 기준으로 비교)
-    public override bool Equals(object obj)
-    {
-        if (obj == null || GetType() != obj.GetType())
-            return false;
-
-        User other = (User)obj;
-        return this.userNumber == other.userNumber;
-    }
-
-    // GetHashCode 재정의
-    public override int GetHashCode()
-    {
-        return userNumber.GetHashCode();
-    }
 }
 
 [System.Serializable]

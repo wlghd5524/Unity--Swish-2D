@@ -56,6 +56,8 @@
         "temp/": true,
         "Temp/": true
     },
-    "dotnet.defaultSolution": "Swish.sln",
-    "dotnet.preferCSharpExtension": true
+    "dotnet.defaultSolution": "Unity--Swish-2D.sln",
+    "dotnet.preferCSharpExtension": true,
+    "omnisharp.useModernNet": false,
+    "omnisharp.enableRoslynAnalyzers": false
 }

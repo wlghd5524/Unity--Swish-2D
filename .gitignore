@@ -73,4 +73,14 @@ crashlytics-build.properties
 
 # Private Assets
 /Assets/PrivateAssets/
-/Assets/UnityTechnologies/
+/Assets/UnityTechnologies
+/Assets/Plugins
+/Assets/Editor Default Resources
+/Assets/ExternalDependencyManager
+/Assets/Firebase
+/Assets/GeneratedLocalRepo
+/Assets/GoogleSignIn
+/Assets/Plugins
+/Assets/StreamingAssets
+/Assets/google-services.json
+user.keystore

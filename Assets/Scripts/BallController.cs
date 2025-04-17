@@ -106,16 +106,19 @@ public class BallController : MonoBehaviour
         // 마우스 클릭 시작 시 (왼쪽 버튼 클릭)
         if (Input.GetMouseButtonDown(0))
         {
-            Vector3 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            RaycastHit2D hit = Physics2D.Raycast(mousePosition, Vector2.zero);
-
-            if (hit.collider != null && hit.collider.gameObject == gameObject)
+            // 공이 이미 움직이고 있거나 크기가 변하는 중이면 드래그 불가
+            if (!rb.isKinematic || isScaling)
             {
-                isDragging = true;
-                startMousePosition = mousePosition;
-                rb.isKinematic = true; // 드래그 중에는 공이 움직이지 않도록 설정
-                hasPassedRim = false; // 공이 림 위로 완전히 지나가지 않았음을 초기화
+                return;
             }
+            
+            Vector3 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            
+            // 화면 어디든 클릭하면 드래그 시작
+            isDragging = true;
+            startMousePosition = mousePosition;
+            rb.isKinematic = true; // 드래그 중에는 공이 움직이지 않도록 설정
+            hasPassedRim = false; // 공이 림 위로 완전히 지나가지 않았음을 초기화
         }
 
         // 드래그 중일 때
@@ -126,7 +129,6 @@ public class BallController : MonoBehaviour
             // 드래그한 거리와 방향 계산
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
-
 
 
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
@@ -425,15 +427,15 @@ public class BallController : MonoBehaviour
         HoopController.Instance.netAudio.Play();
         int effectIndex = 0;
         // 림에 맞았으면 20점, 안 맞았으면 30점
-        if (hitRim && ItemManager.Instance.currentItemState != ItemState.Fireball)
-        {
-            effectIndex = Random.Range(2, 4);
-            ScoreManager.Instance.AddScore(20);
-        }
-        else
+        if (!hitRim || ItemManager.Instance.currentItemState == ItemState.Fireball)
         {
             effectIndex = Random.Range(0, 2);
             ScoreManager.Instance.AddScore(30);
+        }
+        else if(hitRim)
+        {
+            effectIndex = Random.Range(2, 4);
+            ScoreManager.Instance.AddScore(20);
         }
         UIManager.Instance.goalEffect[effectIndex].transform.position = HoopController.Instance.transform.position;
         UIManager.Instance.goalEffect[effectIndex].SetActive(true);
@@ -457,22 +459,42 @@ public class BallController : MonoBehaviour
 
         // 공의 크기를 초기 크기로 설정
         transform.localScale = Vector3.one * maxScale;
-
+        
         // 크기 변화 상태 초기화
         isScaling = false;
         currentScaleTime = 0f;
 
-        // 림의 콜라이더 비활성화
+        // 림의 충돌 비활성화
         HoopController.Instance.rimLeftCollider.enabled = false;
         HoopController.Instance.rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
+        
         if (!hasScored)
         {
             consecutiveGoals = 0;
         }
         hasScored = false;
 
-        HoopController.Instance.hoop.transform.position = new Vector2(Random.Range(-7.5f, 7.5f), Random.Range(1.5f, 4.0f));
+        // 카메라의 가시 영역 계산
+        Camera mainCamera = Camera.main;
+        float cameraHeight = 2f * mainCamera.orthographicSize;
+        float cameraWidth = cameraHeight * mainCamera.aspect;
+
+        // 화면 가시 영역 내에서 골대 위치를 랜덤하게 설정
+        // 화면 폭의 80%를 사용하여 약간의 여백을 둠
+        float horizontalRange = cameraWidth * 0.4f; // 화면 폭의 40%를 좌우로 사용
+        float minX = -horizontalRange;
+        float maxX = horizontalRange;
+        
+        // 높이는 카메라 높이에 맞게 조정 (상단 60% 영역에 배치)
+        float minY = cameraHeight * 0.1f;  // 화면 중앙에서 10% 위쪽부터
+        float maxY = cameraHeight * 0.4f;  // 화면 중앙에서 40% 위쪽까지
+        
+        // 골대 위치 설정
+        HoopController.Instance.hoop.transform.position = new Vector2(
+            Random.Range(minX, maxX), 
+            Random.Range(minY, maxY)
+        );
 
 
         // 기준이 되는 림의 위치와 그에 따른 힘 (림의 초기 위치와 힘)

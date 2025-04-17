@@ -5,7 +5,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-
+using System.Linq;
 public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
@@ -17,16 +17,14 @@ public class GameManager : MonoBehaviour
     public GameObject quitPopup;
     public Button quitCancelButton;
     public Button quitConfirmButton;
-    public Button signInButton;
 
-    public GameObject loginPanel;
+    public GameObject loginFailedPopup;
+    public Button loginPopupCloseButton;
     public GameObject rankingPanel;
     public GameObject RankingListItemPrefab;
     private List<GameObject> rankingItems = new List<GameObject>();
     public Transform rankingItemsTransform;
     public Button rankingCloseButton;
-    public Button loginCloseButton;
-
     public GameObject howToPlayPopup;
     public Button howToPlayCloseButton;
     public Button returnPage;
@@ -39,7 +37,6 @@ public class GameManager : MonoBehaviour
         if (Instance == null)
         {
             Instance = this;
-            DontDestroyOnLoad(gameObject);
         }
         else
         {
@@ -50,6 +47,7 @@ public class GameManager : MonoBehaviour
         QualitySettings.vSyncCount = 0;  // V-Sync 비활성화
         Application.targetFrameRate = 60;  // 프레임 제한 설정
     }
+
     private void OnDestroy()
     {
         // 씬 로드 이벤트 해제 (중복 등록 방지)
@@ -80,19 +78,18 @@ public class GameManager : MonoBehaviour
             {
                 pages.Add(page.gameObject);
             }
+            loginFailedPopup = canvas.transform.Find("LoginFailedPopup").gameObject;
+            loginFailedPopup.SetActive(false);
 
-
-            loginPanel = canvas.transform.Find("LoginPanel").gameObject;
-            signInButton = loginPanel.transform.Find("Popup_Login/Popup/Button_SignIn").GetComponent<Button>();
-            loginCloseButton = loginPanel.transform.Find("Popup_Login/Popup/Button_Close_Line").GetComponent<Button>();
-            loginCloseButton.onClick.AddListener(CloseLoginPopup);
+            loginPopupCloseButton = loginFailedPopup.transform.Find("Button_Close").GetComponent<Button>();
+            loginPopupCloseButton.onClick.AddListener(CloseLoginFailedPopup);
             rankingPanel = canvas.transform.Find("Popup_Ranking").gameObject;
             rankingItemsTransform = rankingPanel.transform.Find("Popup/ScrollRect/Content");
-            startButton.onClick.AddListener(OpenLoginPopup);
+            startButton.onClick.AddListener(() => StartCoroutine(StartGame()));
             howToPlayButton.onClick.AddListener(OpenHowToPlay);
             rankingButton.onClick.AddListener(() => StartCoroutine(OpenRanking()));
             quitButton.onClick.AddListener(QuitGame);
-            signInButton.onClick.AddListener(() => LoginManager.Instance.StartCoroutine(LoginManager.Instance.ValidateSignIn()));
+            //signInButton.onClick.AddListener(() => LoginManager.Instance.StartCoroutine(LoginManager.Instance.ValidateSignIn()));
         }
         else if (scene.name == "GameScene")
         {
@@ -100,23 +97,32 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    void OpenPopup()
+    public IEnumerator StartGame()
     {
-
+        if (FirebaseManager.Instance.GetCurrentUser() == null)
+        {
+            yield return FirebaseManager.Instance.StartCoroutine(FirebaseManager.Instance.GoogleLogin(LoginSuccess =>
+            {
+                if (LoginSuccess)
+                {
+                    SceneManager.LoadScene("GameScene");
+                }
+                else
+                {
+                    loginFailedPopup.SetActive(true);
+                }
+            }));
+        }
+        else
+        {
+            SceneManager.LoadScene("GameScene");
+        }
     }
-    void OpenLoginPopup()
+
+    public void CloseLoginFailedPopup()
     {
-        loginPanel.SetActive(true);
-        LoginManager.Instance.UpdateInputFieldForRememberedUser();
+        loginFailedPopup.SetActive(false);
     }
-
-    public void CloseLoginPopup() { loginPanel.SetActive(false); }
-
-    public void GoToGameScene()
-    {
-        SceneManager.LoadScene("GameScene");
-    }
-
 
     int pageIdex = 0;
 
@@ -130,6 +136,7 @@ public class GameManager : MonoBehaviour
         returnPage.onClick.AddListener(PressReturnPage);
         nextPage.onClick.AddListener(PressNextPage);
     }
+
     void CloseHowToPlay()
     {
         howToPlayPopup.SetActive(false);
@@ -144,6 +151,7 @@ public class GameManager : MonoBehaviour
         pages[pageIdex--].SetActive(false);
         pages[pageIdex].SetActive(true);
     }
+
     void PressNextPage()
     {
         if (pageIdex == pages.Count - 1)
@@ -156,50 +164,94 @@ public class GameManager : MonoBehaviour
 
     Color iconFrameColor;
     int iconIndex;
+
     IEnumerator OpenRanking()
     {
-        yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.UpdateUsers());  // 서버에서 모든 유저 목록 불러오기
+        if (FirebaseManager.Instance.GetCurrentUser() == null)
+        {
+            bool loginSuccessful = false;
+            yield return StartCoroutine(FirebaseManager.Instance.GoogleLogin(loginSuccess =>
+            {
+                loginSuccessful = loginSuccess;
+                if (!loginSuccess)
+                {
+                    loginFailedPopup.SetActive(true);
+                }
+            }));
 
-        GameObject cansvas = GameObject.Find("Canvas");
-        Transform rankingPanelTransform = cansvas.transform.Find("Popup_Ranking");
+            // 로그인 실패 시 여기서 코루틴 종료
+            if (!loginSuccessful)
+            {
+                yield break;
+            }
+        }
+
+        //랭킹 유저 로드
+        yield return StartCoroutine(LoadUsersForRanking());
+        
+        canvas = GameObject.Find("Canvas");
+        Transform rankingPanelTransform = canvas.transform.Find("Popup_Ranking");
         rankingPanel = rankingPanelTransform.gameObject;
         rankingCloseButton = rankingPanel.transform.Find("Popup/Popup_TopBar/Button_Close").GetComponent<Button>();
         rankingCloseButton.onClick.AddListener(CloseRanking);
         rankingItemsTransform = rankingPanel.transform.Find("Popup/ScrollRect/Content");
-        if (SceneManager.GetActiveScene().name == "GameScene")
+        
+        GameObject myRankingItem = rankingPanel.transform.Find("Popup/Ranking_Me").gameObject;
+        TextMeshProUGUI rankText = myRankingItem.transform.Find("Text_Rank").GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI nameText = myRankingItem.transform.Find("Text_UserName").GetComponent<TextMeshProUGUI>();
+        TextMeshProUGUI scoreText = nameText.transform.Find("Group_Text/Text_Score").GetComponent<TextMeshProUGUI>();
+        Image iconFrame = myRankingItem.transform.Find("IconFrame").GetComponent<Image>();
+        
+        // 프로필 이미지 로드 (photoUrl이 있을 경우)
+        if (!string.IsNullOrEmpty(FirebaseManager.Instance.currentUser.photoUrl))
         {
-            GameObject myRankingItem = rankingPanel.transform.Find("Popup/Ranking_Me").gameObject;
-            TextMeshProUGUI rankText = myRankingItem.transform.Find("Text_Rank").GetComponent<TextMeshProUGUI>();
-            TextMeshProUGUI nameText = myRankingItem.transform.Find("Text_UserName").GetComponent<TextMeshProUGUI>();
-            TextMeshProUGUI majorText = nameText.transform.Find("Group_Text/Text_Major").GetComponent<TextMeshProUGUI>();
-            TextMeshProUGUI scoreText = nameText.transform.Find("Group_Text/Text_Score").GetComponent<TextMeshProUGUI>();
-            Image iconFrame = myRankingItem.transform.Find("IconFrame").GetComponent<Image>();
+            // FirebaseManager의 이미지 로드 메서드 사용
+            StartCoroutine(FirebaseManager.Instance.LoadImage(FirebaseManager.Instance.currentUser.photoUrl, iconFrame));
+            // 아이콘 프레임 내부의 모든 아이콘 숨기기
+            for (int i = 0; i < iconFrame.transform.childCount; i++)
+            {
+                iconFrame.transform.GetChild(i).gameObject.SetActive(false);
+            }
+        }
+        else
+        {
+            // photoUrl이 없을 경우 기존 랜덤 아이콘 표시
             iconFrameColor = new Color(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value);
             iconFrame.color = iconFrameColor;
             iconIndex = UnityEngine.Random.Range(0, 5);
             iconFrame.transform.GetChild(iconIndex).gameObject.SetActive(true);
-
-            int rank = User.users.IndexOf(LoginManager.Instance.currentUser);
-            if (rank == 0)
-            {
-                myRankingItem.transform.Find("Icon_Medal_Gold").gameObject.SetActive(true);
-            }
-            else if (rank == 1)
-            {
-                myRankingItem.transform.Find("Icon_Medal_Silver").gameObject.SetActive(true);
-            }
-            else if (rank == 2)
-            {
-                myRankingItem.transform.Find("Icon_Medal_Bronze").gameObject.SetActive(true);
-            }
-            else
-            {
-                rankText.text = (rank + 1).ToString();
-            }
-            nameText.text = $"{LoginManager.Instance.currentUser.userNumber}  {LoginManager.Instance.currentUser.name}";
-            majorText.text = LoginManager.Instance.currentUser.major;
-            scoreText.text = LoginManager.Instance.currentUser.score.ToString();
         }
+
+        // 내 랭킹 위치 찾기
+        int rank = User.users.FindIndex(u => u.uid == FirebaseManager.Instance.currentUser.uid) + 1;
+        
+        // 랭킹에 따른 메달 표시 설정
+        myRankingItem.transform.Find("Icon_Medal_Gold").gameObject.SetActive(false);
+        myRankingItem.transform.Find("Icon_Medal_Silver").gameObject.SetActive(false);
+        myRankingItem.transform.Find("Icon_Medal_Bronze").gameObject.SetActive(false);
+        
+        if (rank == 1)
+        {
+            myRankingItem.transform.Find("Icon_Medal_Gold").gameObject.SetActive(true);
+            rankText.text = "";
+        }
+        else if (rank == 2)
+        {
+            myRankingItem.transform.Find("Icon_Medal_Silver").gameObject.SetActive(true);
+            rankText.text = "";
+        }
+        else if (rank == 3)
+        {
+            myRankingItem.transform.Find("Icon_Medal_Bronze").gameObject.SetActive(true);
+            rankText.text = "";
+        }
+        else
+        {
+            rankText.text = rank.ToString();
+        }
+        
+        nameText.text = $"{FirebaseManager.Instance.currentUser.displayName}";
+        scoreText.text = FirebaseManager.Instance.currentUser.score.ToString();
 
         // 기존에 생성된 랭킹 아이템들 삭제
         foreach (Transform item in rankingItemsTransform)
@@ -208,8 +260,9 @@ public class GameManager : MonoBehaviour
         }
         rankingItems.Clear();
 
-        // User.users 리스트를 기반으로 프리팹 생성
-        for (int i = 0; i < User.users.Count; i++)
+        // 상위 20명의 유저만 표시
+        int maxRankingCount = Mathf.Min(20, User.users.Count);
+        for (int i = 0; i < maxRankingCount; i++)
         {
             CreateRankingItem(User.users[i], i);
         }
@@ -220,6 +273,7 @@ public class GameManager : MonoBehaviour
     {
         rankingPanel.SetActive(false);
     }
+
     void QuitGame()
     {
         quitPopup.SetActive(true);
@@ -233,11 +287,13 @@ public class GameManager : MonoBehaviour
     {
         quitPopup.SetActive(false);
     }
+
     void PressConfirmButton()
     {
         //게임 종료
         Application.Quit();
     }
+
     // 랭킹 아이템 생성 함수
     private void CreateRankingItem(User user, int index)
     {
@@ -252,21 +308,26 @@ public class GameManager : MonoBehaviour
 
         TextMeshProUGUI rankText = rankingItem.transform.Find("Text_Rank").GetComponent<TextMeshProUGUI>();
         TextMeshProUGUI nameText = rankingItem.transform.Find("Text_UserName").GetComponent<TextMeshProUGUI>();
-        TextMeshProUGUI majorText = nameText.transform.Find("Group_Text/Text_Major").GetComponent<TextMeshProUGUI>();
         TextMeshProUGUI scoreText = nameText.transform.Find("Group_Text/Text_Score").GetComponent<TextMeshProUGUI>();
         Image iconFrame = rankingItem.transform.Find("IconFrame").GetComponent<Image>();
 
-        if (SceneManager.GetActiveScene().name == "GameScene" && user.userNumber == LoginManager.Instance.currentUser.userNumber)
+        // 프로필 이미지 로드 (photoUrl이 있을 경우)
+        if (!string.IsNullOrEmpty(user.photoUrl))
         {
-            iconFrame.color = iconFrameColor;
-            iconFrame.transform.GetChild(iconIndex).gameObject.SetActive(true);
+            // FirebaseManager의 이미지 로드 메서드 사용
+            StartCoroutine(FirebaseManager.Instance.LoadImage(user.photoUrl, iconFrame));
+            // 아이콘 프레임 내부의 모든 아이콘 숨기기
+            for (int i = 0; i < iconFrame.transform.childCount; i++)
+            {
+                iconFrame.transform.GetChild(i).gameObject.SetActive(false);
+            }
         }
         else
         {
+            // 그 외 사용자는 랜덤 아이콘 사용
             iconFrame.color = new Color(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value);
             iconFrame.transform.GetChild(UnityEngine.Random.Range(0, 5)).gameObject.SetActive(true);
         }
-
 
         if (index == 0)
         {
@@ -284,30 +345,89 @@ public class GameManager : MonoBehaviour
         {
             rankText.text = (index + 1).ToString();
         }
-        if (nameText != null) nameText.text = $"{user.userNumber}  {user.name}";
-        if (majorText != null) majorText.text = user.major;
+        if (nameText != null) nameText.text = $"{user.displayName}";
         if (scoreText != null) scoreText.text = user.score.ToString();
-
 
         // 리스트에 추가하여 관리
         rankingItems.Add(rankingItem);
     }
-    public void GameOver()
+
+    public IEnumerator GameOver()
     {
-        if(ScoreManager.Instance.currentScore > LoginManager.Instance.currentUser.score)
+        if (ScoreManager.Instance.currentScore > FirebaseManager.Instance.currentUser.score)
         {
-            LoginManager.Instance.currentUser.score = ScoreManager.Instance.currentScore;
+            FirebaseManager.Instance.currentUser.score = ScoreManager.Instance.currentScore;
+            yield return FirebaseManager.Instance.SaveUser(ScoreManager.Instance.currentScore);
         }
-        // Register 코루틴이 완료된 후 OpenRanking 실행
-        StartCoroutine(SubmitDataAndOpenRanking());
+        yield return OpenRanking();
     }
 
-    IEnumerator SubmitDataAndOpenRanking()
+    // 랭킹을 위한 유저 정보 로드 코루틴
+    private IEnumerator LoadUsersForRanking()
     {
-        // Register 코루틴 실행 및 완료 대기
-        yield return WebConnector.Instance.StartCoroutine(WebConnector.Instance.SendUserDataToServer(LoginManager.Instance.currentUser));
-
-        // Register가 완료되면 OpenRanking 실행
-        yield return StartCoroutine(OpenRanking());
+        bool topUsersLoaded = false;
+        bool currentUserLoaded = false;
+        User currentUserData = null;
+        string currentUserId = FirebaseManager.Instance.GetCurrentUser().UserId;
+        bool isCurrentUserInTop20 = false;
+        
+        // 상위 20명의 유저 데이터 가져오기
+        FirebaseManager.Instance.GetTopUsers(20, users => {
+            topUsersLoaded = true;
+            Debug.Log($"랭킹을 위해 상위 {users.Count}명의 유저 정보를 로드했습니다.");
+            
+            // 현재 유저가 상위 20명에 포함되어 있는지 확인
+            isCurrentUserInTop20 = User.users.Any(u => u.uid == currentUserId);
+            
+            // 리스트에 현재 로그인된 유저가 있다면 FirebaseManager.Instance.currentUser에 설정
+            if (isCurrentUserInTop20)
+            {
+                User currentUserInList = User.users.Find(u => u.uid == currentUserId);
+                if (currentUserInList != null)
+                {
+                    FirebaseManager.Instance.currentUser = currentUserInList;
+                    Debug.Log("상위 랭킹 리스트에서 현재 유저 정보를 설정했습니다.");
+                }
+            }
+        });
+        
+        // 현재 유저가 상위 20명에 없는 경우에만 개별적으로 정보 가져오기
+        yield return new WaitUntil(() => topUsersLoaded);
+        
+        if (!isCurrentUserInTop20)
+        {
+            FirebaseManager.Instance.GetUserData(currentUserId, user => {
+                if (user != null)
+                {
+                    currentUserData = user;
+                    FirebaseManager.Instance.currentUser = user;
+                    currentUserLoaded = true;
+                    Debug.Log("현재 유저 정보를 추가로 로드했습니다.");
+                }
+                else
+                {
+                    Debug.LogError("현재 유저 정보를 가져오는데 실패했습니다.");
+                    currentUserLoaded = true; // 실패했지만 완료 처리
+                }
+            });
+            
+            yield return new WaitUntil(() => currentUserLoaded);
+            
+            if (currentUserData != null)
+            {
+                // 현재 유저가 상위 20명에 포함되지 않았을 때만 추가
+                bool alreadyExists = User.users.Any(u => u.uid == currentUserData.uid);
+                if (!alreadyExists)
+                {
+                    User.users.Add(currentUserData);
+                    Debug.Log("현재 유저 정보를 유저 목록에 추가했습니다.");
+                }
+            }
+        }
+        
+        // User.users 리스트가 항상 점수 내림차순으로 정렬되어 있도록 한 번 더 정렬
+        User.users = User.users
+            .OrderByDescending(u => u.score)
+            .ToList();
     }
 }

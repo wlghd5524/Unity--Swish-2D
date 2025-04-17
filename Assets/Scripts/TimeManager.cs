@@ -56,7 +56,7 @@ public class TimeManager : MonoBehaviour
                 }
                 if (BallController.Instance.rb.velocity.sqrMagnitude == 0 && !hasCalledGameOver)
                 {
-                    GameManager.Instance.GameOver();
+                    StartCoroutine(GameManager.Instance.GameOver());
                     hasCalledGameOver = true;
                 }
             }
