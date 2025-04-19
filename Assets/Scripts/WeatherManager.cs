@@ -14,6 +14,7 @@ public class WeatherManager : MonoBehaviour
     public bool isFoggy;
     public float windForce;
     public Vector2 windDirection;
+    public ParticleSystem windParticleSystem;
 
     private void Awake()
     {
@@ -26,6 +27,8 @@ public class WeatherManager : MonoBehaviour
         windArrow = GameObject.Find("Canvas/Wind/WindArrow");
         windVelocityText = GameObject.Find("Canvas/Wind/WindVelocity").GetComponent<TextMeshProUGUI>();
         isWindy = false;
+        windParticleSystem = GameObject.Find("WindParticle").GetComponent<ParticleSystem>();
+        windParticleSystem.Pause();
 
         fogGameObject = GameObject.Find("Fog");
         fogUI = GameObject.Find("Canvas/FogUI");
@@ -73,6 +76,9 @@ public class WeatherManager : MonoBehaviour
         // 바람의 세기에 따라 X축으로 힘을 가함
         Vector2 windEffect = windDirection * windForce * Time.deltaTime;
         BallController.Instance.rb.AddForce(windEffect, ForceMode2D.Force);
+        var main = windParticleSystem.main;
+        main.startSpeed = windDirection.x * windForce / 10;
+        windParticleSystem.Play();
     }
 
     public void WindInit()

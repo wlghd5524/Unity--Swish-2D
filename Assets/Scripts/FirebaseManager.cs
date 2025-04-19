@@ -114,9 +114,9 @@ public class FirebaseManager : MonoBehaviour
                         GetUserData(user.UserId, user =>
                         {
                             currentUser = user;
+                            isSuccess = true;
+                            isComplete = true;
                         });
-                        isSuccess = true;
-                        isComplete = true;
                     }
                 });
             }
@@ -132,7 +132,7 @@ public class FirebaseManager : MonoBehaviour
         {
             // 작업 완료 플래그
             bool isComplete = false;
-            
+
             // 사용자 정보를 담은 딕셔너리 생성
             Dictionary<string, object> userData = new Dictionary<string, object>
             {
@@ -161,7 +161,7 @@ public class FirebaseManager : MonoBehaviour
                             { "score", score },
                             { "playTime", Timestamp.FromDateTime(System.DateTime.UtcNow) }
                         };
-                        
+
                         userRef.UpdateAsync(updates)
                             .ContinueWithOnMainThread(updateTask =>
                             {
@@ -199,7 +199,7 @@ public class FirebaseManager : MonoBehaviour
                     isComplete = true;
                 }
             });
-            
+
             // 작업이 완료될 때까지 대기
             yield return new WaitUntil(() => isComplete);
             Debug.Log("SaveUser completed");
@@ -242,7 +242,7 @@ public class FirebaseManager : MonoBehaviour
                             int.TryParse(userData["score"].ToString(), out score);
                         }
                         string timestamp = userData.ContainsKey("timestamp") ? userData["timestamp"].ToString() : "";
-                        
+
                         User user = new User(uid, email, displayName, photoUrl, score, timestamp);
                         callback(user);
                     }
@@ -275,22 +275,49 @@ public class FirebaseManager : MonoBehaviour
     // 로그아웃
     public void SignOut()
     {
+        bool firebaseSignedOut = false;
+
+        // Firebase 로그아웃 시도
         if (auth != null && auth.CurrentUser != null)
         {
-            GoogleSignIn.DefaultInstance.SignOut();
-            auth.SignOut();
-            user = null;
-            Debug.Log("User signed out");
+            try
+            {
+                auth.SignOut();
+                user = null;
+                firebaseSignedOut = true;
+                Debug.Log("Firebase signed out");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogError("Firebase sign out error: " + e.Message);
+            }
         }
-    }
 
-    private string CheckImageUrl(string url)
-    {
-        if (!string.IsNullOrEmpty(url))
+        // Google 로그아웃 시도 (Firebase 로그인 여부와 무관하게)
+        try
         {
-            return url;
+            GoogleSignIn.DefaultInstance.SignOut();
+            Debug.Log("Google signed out");
         }
-        return imageUrl;
+        catch (System.Exception e)
+        {
+            Debug.LogError("Google sign out error: " + e.Message);
+        }
+
+        // 공통 정리 작업
+        currentUser = null;
+
+        // 로그아웃 팝업 표시 (적어도 하나는 성공했을 경우)
+        if (firebaseSignedOut)
+        {
+            GameManager.Instance.logOutPopup.SetActive(true);
+            GameManager.Instance.logOutCloseButton = GameManager.Instance.logOutPopup.transform.Find("Button_Close").GetComponent<Button>();
+            GameManager.Instance.logOutCloseButton.onClick.AddListener(() => GameManager.Instance.ClosePopup(GameManager.Instance.logOutPopup));
+        }
+        else
+        {
+            Debug.LogWarning("No active sessions to sign out from");
+        }
     }
 
     // 이미지 로드를 위한 통합 메서드
@@ -313,7 +340,7 @@ public class FirebaseManager : MonoBehaviour
         {
             Texture2D texture = DownloadHandlerTexture.GetContent(www);
             Sprite sprite = Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f));
-            
+
             // 대상 이미지가 지정되지 않은 경우 기본 프로필 이미지에 적용
             if (targetImage == null && UserProfilePic != null)
             {
@@ -346,7 +373,7 @@ public class FirebaseManager : MonoBehaviour
         if (targetImage != null)
         {
             targetImage.color = new Color(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value);
-            
+
             // 자식 오브젝트가 있는지 확인 (아이콘)
             if (targetImage.transform.childCount > 0)
             {
@@ -355,7 +382,7 @@ public class FirebaseManager : MonoBehaviour
                 {
                     targetImage.transform.GetChild(i).gameObject.SetActive(false);
                 }
-                
+
                 // 랜덤 아이콘 활성화
                 int randomIcon = UnityEngine.Random.Range(0, targetImage.transform.childCount);
                 targetImage.transform.GetChild(randomIcon).gameObject.SetActive(true);
@@ -381,7 +408,7 @@ public class FirebaseManager : MonoBehaviour
             {
                 QuerySnapshot querySnapshot = task.Result;
                 List<User> users = new List<User>();
-                
+
                 foreach (DocumentSnapshot documentSnapshot in querySnapshot.Documents)
                 {
                     Dictionary<string, object> userData = documentSnapshot.ToDictionary();
@@ -398,7 +425,7 @@ public class FirebaseManager : MonoBehaviour
                             int.TryParse(userData["score"].ToString(), out score);
                         }
                         string timestamp = userData.ContainsKey("timestamp") ? userData["timestamp"].ToString() : "";
-                        
+
                         User newUser = new User(uid, email, displayName, photoUrl, score, timestamp);
                         users.Add(newUser);
                     }
@@ -409,11 +436,11 @@ public class FirebaseManager : MonoBehaviour
                 }
 
                 Debug.Log($"Found {users.Count} top users.");
-                
+
                 // User.users 리스트에 데이터 저장
                 User.users.Clear(); // 기존 목록 초기화
                 User.users.AddRange(users);
-                
+
                 callback(users);
             }
             else

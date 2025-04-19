@@ -70,26 +70,10 @@ public class BallController : MonoBehaviour
         fireEffect = fireEffectGameObject.GetComponent<ParticleSystemRenderer>();
         fireEffectGameObject.SetActive(false);
 
-        // LineRenderer 설정
-        trajectoryLines = GetComponentsInChildren<LineRenderer>();
-        trajectoryLines[0].positionCount = 0;
-        trajectoryLines[0].startWidth = 0.1f;
-        trajectoryLines[0].endWidth = 0.1f;
-        // 유도선 색상 설정 (첫 번째 궤도선: 노란색에서 주황색)
-        trajectoryLines[0].startColor = Color.yellow;
-        trajectoryLines[0].endColor = new Color(1f, 0.5f, 0f); // 주황색
-
-        trajectoryLines[1].positionCount = 0;
-        trajectoryLines[1].startWidth = 0.1f;
-        trajectoryLines[1].endWidth = 0.1f;
-        // 유도선 색상 설정 (두 번째 궤도선: 주황색에서 빨간색)
-        trajectoryLines[1].startColor = new Color(1f, 0.5f, 0f); // 주황색
-        trajectoryLines[1].endColor = Color.red;
+        TrajectoryLineInit();
 
         // 초기에는 공이 림보다 위에 그려지도록 설정
-        ballSpriteRenderers[0].sortingOrder = 3;
-        ballSpriteRenderers[1].sortingOrder = 3;
-        ballSpriteRenderers[2].sortingOrder = 3;
+        UpdateSpritesSortingOrder(ballSpriteRenderers, 3);
         HoopController.Instance.rimSpriteRenderer.sortingOrder = 2;
         HoopController.Instance.netSpriteRenderer.sortingOrder = 2;
 
@@ -111,9 +95,9 @@ public class BallController : MonoBehaviour
             {
                 return;
             }
-            
+
             Vector3 mousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            
+
             // 화면 어디든 클릭하면 드래그 시작
             isDragging = true;
             startMousePosition = mousePosition;
@@ -130,7 +114,6 @@ public class BallController : MonoBehaviour
             Vector3 dragVector = startMousePosition - endMousePosition;
             float dragDistance = dragVector.magnitude; // 드래그 길이 계산
 
-
             // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
             Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
             // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
@@ -143,40 +126,7 @@ public class BallController : MonoBehaviour
         // 마우스 클릭 종료 시 (왼쪽 버튼 놓기)
         if (Input.GetMouseButtonUp(0) && isDragging)
         {
-            isDragging = false;
-            rb.isKinematic = false; // 물리 효과 활성화
-            trajectoryLines[0].positionCount = 0; // 유도선 초기화
-            trajectoryLines[1].positionCount = 0; // 유도선 초기화
-            endMousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-
-            // 드래그한 거리와 방향 계산
-            Vector3 dragVector = startMousePosition - endMousePosition;
-            float dragDistance = dragVector.magnitude; // 드래그 길이 계산
-                                                       // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
-            float forceMaginitude = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
-            // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
-            Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
-            ballForce = throwDirection * forceMaginitude;
-
-            if (ItemManager.Instance.currentItemState == ItemState.Fireball)
-            {
-                throwDirection = new Vector2(0, 1).normalized;
-                ballForce = new Vector2(0, throwDirection.y * ballMaxForceForTrajectoryLine.y);
-            }
-
-            // 공에 힘을 가하여 던지기
-            rb.AddForce(ballForce, ForceMode2D.Impulse);
-
-            // 던지는 힘에 비례하여 회전력 추가
-            float torque = forceMaginitude * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
-            rb.AddTorque(torque);
-
-            // 공의 크기 변화 시간 설정: 던지는 힘에 비례하여 설정
-            scaleDuration = baseScaleDuration / (forceMaginitude / baseThrowForce);
-
-            isScaling = true;
-            TimeManager.Instance.timeOn = true;
-            ballThrowCountForItem++;
+            Shoot();
         }
 
         // 공이 날아가는 동안 크기 변화
@@ -188,9 +138,7 @@ public class BallController : MonoBehaviour
         // 공이 림을 완전히 넘어가기 전에는 공이 림보다 위에 그려지도록 설정
         if (!hasPassedRim)
         {
-            ballSpriteRenderers[0].sortingOrder = 3;
-            ballSpriteRenderers[1].sortingOrder = 3;
-            ballSpriteRenderers[2].sortingOrder = 3;
+            UpdateSpritesSortingOrder(ballSpriteRenderers, 3);
 
             HoopController.Instance.rimSpriteRenderer.sortingOrder = 2;
             HoopController.Instance.netSpriteRenderer.sortingOrder = 2;
@@ -198,9 +146,7 @@ public class BallController : MonoBehaviour
         else
         {
             // 공이 림을 넘어간 후에는 림이 공보다 위에 그려지도록 설정
-            ballSpriteRenderers[0].sortingOrder = 2;
-            ballSpriteRenderers[1].sortingOrder = 2;
-            ballSpriteRenderers[2].sortingOrder = 2;
+            UpdateSpritesSortingOrder(ballSpriteRenderers, 2);
 
             HoopController.Instance.rimSpriteRenderer.sortingOrder = 3;
             HoopController.Instance.netSpriteRenderer.sortingOrder = 3;
@@ -218,15 +164,13 @@ public class BallController : MonoBehaviour
             //공이 너무 세면 백보드를 넘어가 공이 백보드 뒤에 그려지도록 설정
             if (ballForce.magnitude > ballMaxForceForTrajectoryLine.magnitude)
             {
-                ballSpriteRenderers[0].sortingOrder = 0;
-                ballSpriteRenderers[1].sortingOrder = 0;
-                ballSpriteRenderers[2].sortingOrder = 0;
+                UpdateSpritesSortingOrder(ballSpriteRenderers, 0);
             }
             else
             {
                 HoopController.Instance.rimLeftCollider.enabled = true;
                 HoopController.Instance.rimRightCollider.enabled = true;
-                for(int i = 0; i < HoopController.Instance.netColliders.Length;i++)
+                for (int i = 0; i < HoopController.Instance.netColliders.Length; i++)
                 {
                     HoopController.Instance.netColliders[i].enabled = true;
                 }
@@ -291,16 +235,73 @@ public class BallController : MonoBehaviour
             }
         }
 
+        // 힘의 세기에 따른 색상 설정
+        Color startColor, midColor, endColor;
+
+        // 힘이 최소 힘보다 작은 경우 (너무 약함)
+        if (force.magnitude < ballMinForceForTrajectoryLine.magnitude)
+        {
+            startColor = new Color(1f, 0.9f, 0.2f); // 밝은 노란색
+            midColor = new Color(1f, 1f, 0.4f);    // 연한 노란색
+            endColor = new Color(1f, 1f, 0.6f);    // 더 연한 노란색
+        }
+        // 힘이 최대 힘보다 큰 경우 (너무 강함)
+        else if (force.magnitude > ballMaxForceForTrajectoryLine.magnitude)
+        {
+            startColor = new Color(1f, 0.3f, 0.3f); // 빨간색
+            midColor = new Color(1f, 0.2f, 0.2f);  // 진한 빨간색
+            endColor = new Color(0.8f, 0.1f, 0.1f); // 더 진한 빨간색
+        }
+        // 적절한 힘인 경우
+        else
+        {
+            // 힘의 크기를 기준으로 적절한 힘의 정도 계산 (0-1 사이의 값)
+            float normalizedForce = (force.magnitude - ballMinForceForTrajectoryLine.magnitude) /
+                                    (ballMaxForceForTrajectoryLine.magnitude - ballMinForceForTrajectoryLine.magnitude);
+
+            // 이상적인 힘은 중간 정도의 힘 (normalizedForce = 0.5)로 설정
+            float idealForce = 0.5f;
+            float distanceFromIdeal = Mathf.Abs(normalizedForce - idealForce) * 2; // 0-1 사이의 값
+
+            // 항상 초록색 계열 유지, 힘에 따라 밝기/진하기만 조절
+            Color perfectGreen = new Color(0.2f, 0.9f, 0.3f); // 이상적인 힘일 때 밝은 초록색
+
+            if (normalizedForce < idealForce) // 조금 약한 경우 (연한 초록색 방향)
+            {
+                Color lightGreen = new Color(0.6f, 1.0f, 0.6f); // 연한 초록색(밝은)
+                float t = distanceFromIdeal;
+
+                startColor = Color.Lerp(perfectGreen, lightGreen, t * 0.7f);
+                midColor = Color.Lerp(perfectGreen, lightGreen, t * 0.85f);
+                endColor = Color.Lerp(perfectGreen, lightGreen, t);
+            }
+            else // 조금 강한 경우 (진한 초록색 방향)
+            {
+                Color darkGreen = new Color(0.0f, 0.6f, 0.1f); // 진한 초록색
+                float t = distanceFromIdeal;
+
+                startColor = Color.Lerp(perfectGreen, darkGreen, t * 0.7f);
+                midColor = Color.Lerp(perfectGreen, darkGreen, t * 0.85f);
+                endColor = Color.Lerp(perfectGreen, darkGreen, t);
+            }
+        }
+
         // 궤도 그리기
         trajectoryLines[0].positionCount = peakIndex + 1;
+        trajectoryLines[0].startColor = startColor;
+        trajectoryLines[0].endColor = midColor;
+
         for (int i = 0; i <= peakIndex; i++)
         {
             float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
             trajectoryLines[0].SetPosition(i, pointPosition);
         }
+
         // 두 번째 LineRenderer의 첫 번째 포인트를 첫 번째 LineRenderer의 마지막 포인트로 설정
         trajectoryLines[1].positionCount = visiblePointCount - peakIndex;
+        trajectoryLines[1].startColor = midColor;
+        trajectoryLines[1].endColor = endColor;
         trajectoryLines[1].SetPosition(0, trajectoryLines[0].GetPosition(peakIndex));
 
         for (int i = peakIndex + 1; i < visiblePointCount; i++)
@@ -308,7 +309,6 @@ public class BallController : MonoBehaviour
             float t = i * timeSlot;
             Vector2 pointPosition = startPosition + velocity * t + 0.5f * Physics2D.gravity * t * t;
             trajectoryLines[1].SetPosition(i - peakIndex, pointPosition);
-
         }
 
         // 앞부분 궤도는 림보다 앞에 렌더링
@@ -326,7 +326,6 @@ public class BallController : MonoBehaviour
                 // 뒷부분 궤도는 일정 힘 이상일 때 림보다 앞에 렌더링
                 trajectoryLines[1].sortingOrder = 2;
             }
-
         }
         else
         {
@@ -420,6 +419,43 @@ public class BallController : MonoBehaviour
         }
     }
 
+    private void Shoot()
+    {
+        isDragging = false;
+        rb.isKinematic = false; // 물리 효과 활성화
+        trajectoryLines[0].positionCount = 0; // 유도선 초기화
+        trajectoryLines[1].positionCount = 0; // 유도선 초기화
+        endMousePosition = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+
+        // 드래그한 거리와 방향 계산
+        Vector3 dragVector = startMousePosition - endMousePosition;
+        float dragDistance = dragVector.magnitude; // 드래그 길이 계산
+                                                   // 드래그 거리의 최대값을 설정하여 너무 멀리 드래그해도 일정 값 이상 힘이 증가하지 않도록 설정
+        float forceMaginitude = Mathf.Clamp(dragDistance * forceMultiplier, baseThrowForce, maxThrowForce);
+        // 던지는 방향과 힘 계산 (드래그 방향의 반대 방향으로 던짐)
+        Vector2 throwDirection = new Vector2(dragVector.x, dragVector.y).normalized;
+        ballForce = throwDirection * forceMaginitude;
+
+        if (ItemManager.Instance.currentItemState == ItemState.Fireball)
+        {
+            throwDirection = new Vector2(0, 1).normalized;
+            ballForce = new Vector2(0, throwDirection.y * ballMaxForceForTrajectoryLine.y);
+        }
+
+        // 공에 힘을 가하여 던지기
+        rb.AddForce(ballForce, ForceMode2D.Impulse);
+
+        // 던지는 힘에 비례하여 회전력 추가
+        float torque = forceMaginitude * rotationMultiplier * (throwDirection.x > 0 ? 1 : -1);
+        rb.AddTorque(torque);
+
+        // 공의 크기 변화 시간 설정: 던지는 힘에 비례하여 설정
+        scaleDuration = baseScaleDuration / (forceMaginitude / baseThrowForce);
+
+        isScaling = true;
+        TimeManager.Instance.timeOn = true;
+        ballThrowCountForItem++;
+    }
     private void Goal()
     {
         rb.velocity = new Vector2(0, rb.velocity.y * 0.5f);
@@ -432,7 +468,7 @@ public class BallController : MonoBehaviour
             effectIndex = Random.Range(0, 2);
             ScoreManager.Instance.AddScore(30);
         }
-        else if(hitRim)
+        else if (hitRim)
         {
             effectIndex = Random.Range(2, 4);
             ScoreManager.Instance.AddScore(20);
@@ -459,7 +495,7 @@ public class BallController : MonoBehaviour
 
         // 공의 크기를 초기 크기로 설정
         transform.localScale = Vector3.one * maxScale;
-        
+
         // 크기 변화 상태 초기화
         isScaling = false;
         currentScaleTime = 0f;
@@ -468,7 +504,7 @@ public class BallController : MonoBehaviour
         HoopController.Instance.rimLeftCollider.enabled = false;
         HoopController.Instance.rimRightCollider.enabled = false;
         hasPassedRim = false; // 림 위를 넘지 않은 상태로 초기화
-        
+
         if (!hasScored)
         {
             consecutiveGoals = 0;
@@ -485,14 +521,14 @@ public class BallController : MonoBehaviour
         float horizontalRange = cameraWidth * 0.4f; // 화면 폭의 40%를 좌우로 사용
         float minX = -horizontalRange;
         float maxX = horizontalRange;
-        
+
         // 높이는 카메라 높이에 맞게 조정 (상단 60% 영역에 배치)
         float minY = cameraHeight * 0.1f;  // 화면 중앙에서 10% 위쪽부터
         float maxY = cameraHeight * 0.4f;  // 화면 중앙에서 40% 위쪽까지
-        
+
         // 골대 위치 설정
         HoopController.Instance.hoop.transform.position = new Vector2(
-            Random.Range(minX, maxX), 
+            Random.Range(minX, maxX),
             Random.Range(minY, maxY)
         );
 
@@ -511,24 +547,51 @@ public class BallController : MonoBehaviour
         // 림 위치에 따라 최소 및 최대 힘을 조정 (거리 비율을 적용)
         ballMinForceForTrajectoryLine = referenceMinForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
         ballMaxForceForTrajectoryLine = referenceMaxForce + rimPositionDifference * 0.5f;  // 거리 비율로 조정
-        if(ItemManager.Instance.currentItemState == ItemState.GiantRim)
+        if (ItemManager.Instance.currentItemState == ItemState.GiantRim)
         {
             ballMaxForceForTrajectoryLine = new Vector2(1000f, 1000f);
         }
 
         WeatherManager.Instance.WindInit();
-        if(hasGetItem) 
+        if (hasGetItem)
         {
             ItemManager.Instance.currentItemState = ItemManager.Instance.currentItem;
             hasGetItem = false;
         }
         ItemManager.Instance.ItemUpdate();
-        
-        foreach(GameObject effect in UIManager.Instance.goalEffect)
+
+        foreach (GameObject effect in UIManager.Instance.goalEffect)
         {
             effect.SetActive(false);
         }
+        WeatherManager.Instance.windParticleSystem.Clear();
         //ballAudio.clip = catchingSounds[Random.Range(0, catchingSounds.Count)];
         //ballAudio.Play();
+    }
+    public void UpdateSpritesSortingOrder(SpriteRenderer[] spriteRenderers, int sortingOrder)
+    {
+        foreach (SpriteRenderer spriteRenderer in spriteRenderers)
+        {
+            spriteRenderer.sortingOrder = sortingOrder;
+        }
+    }
+
+    public void TrajectoryLineInit()
+    {
+        // LineRenderer 설정
+        trajectoryLines = GetComponentsInChildren<LineRenderer>();
+        trajectoryLines[0].positionCount = 0;
+        trajectoryLines[0].startWidth = 0.1f;
+        trajectoryLines[0].endWidth = 0.1f;
+        // 유도선 색상 설정 (첫 번째 궤도선: 노란색에서 주황색)
+        trajectoryLines[0].startColor = Color.yellow;
+        trajectoryLines[0].endColor = new Color(1f, 0.5f, 0f); // 주황색
+
+        trajectoryLines[1].positionCount = 0;
+        trajectoryLines[1].startWidth = 0.1f;
+        trajectoryLines[1].endWidth = 0.1f;
+        // 유도선 색상 설정 (두 번째 궤도선: 주황색에서 빨간색)
+        trajectoryLines[1].startColor = new Color(1f, 0.5f, 0f); // 주황색
+        trajectoryLines[1].endColor = Color.red;
     }
 }
